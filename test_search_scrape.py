@@ -21,7 +21,7 @@ async def main():
         max_tweets=50000,         # High limit
         chunk_days=30,            # 30-day chunks
         max_restarts=50,          # Allow many restarts
-        docker_compose_path='C:\\Users\\Alex\\GitHub\\project-hyperdrive',
+        docker_compose_path='.',
     ) as scraper:
         result = await scraper.scrape_user(
             username="elonmusk",

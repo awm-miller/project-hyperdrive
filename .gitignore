@@ -1,2 +1,40 @@
+# Environment and secrets
 .env
+*.env
 sessions.jsonl
+cookies.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.venv/
+
+# Logs
+*.log
+hyperdrive.pid
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker data (local)
+redis-data/
+
+# Test outputs
+*_tweets.txt
+*_retweets.txt
+
+# Cursor
+.cursor/
+*.zip

@@ -36,7 +36,7 @@ logger = logging.getLogger("api")
 
 # Get configuration from environment
 NITTER_URL = os.getenv("NITTER_URL", "http://localhost:8080")
-DOCKER_COMPOSE_PATH = os.getenv("DOCKER_COMPOSE_PATH", "C:\\Users\\Alex\\GitHub\\project-hyperdrive")
+DOCKER_COMPOSE_PATH = os.getenv("DOCKER_COMPOSE_PATH", ".")
 
 
 @asynccontextmanager
@@ -366,11 +366,15 @@ async def analyze_tweets(request: AnalyzeRequest):
                 "images": getattr(t, 'images', []),
             }
     
-    # Compile tweets for analysis
+    # Compile tweets for analysis - include retweet info and original author
     compiled_lines = []
     for t in all_tweets:
-        prefix = "[RT] " if getattr(t, 'is_retweet', False) else ""
-        compiled_lines.append(f"{prefix}[{t.timestamp}] {t.content}")
+        if getattr(t, 'is_retweet', False):
+            original_author = getattr(t, 'original_author', 'unknown')
+            line = f"[RETWEET of @{original_author}] [{t.timestamp}] {t.content}"
+        else:
+            line = f"[{t.timestamp}] {t.content}"
+        compiled_lines.append(line)
     compiled = "\n---\n".join(compiled_lines)
     
     # Truncate if too long (Gemini context limit)

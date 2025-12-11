@@ -42,7 +42,6 @@ class Tweet:
     replies: int = 0
     is_retweet: bool = False
     is_reply: bool = False
-    author: str = ""
 
 
 @dataclass
@@ -59,7 +58,11 @@ class ScrapeResult:
 class NitterSearchScraper:
     """Scrapes tweets using Nitter's search endpoint with date chunking."""
 
-    MULLVAD_CLI = r"C:\Program Files\Mullvad VPN\resources\mullvad.exe"
+    # Mullvad CLI path - auto-detect OS, override with MULLVAD_CLI env var
+    if os.name == 'nt':  # Windows
+        MULLVAD_CLI = os.getenv("MULLVAD_CLI", r"C:\Program Files\Mullvad VPN\resources\mullvad.exe")
+    else:  # Linux/Mac
+        MULLVAD_CLI = os.getenv("MULLVAD_CLI", "/usr/bin/mullvad")
     VPN_COUNTRIES = ["us", "gb", "de", "nl", "se", "ch", "ca", "fr", "jp", "au", "sg", "br", "it", "es", "pl", "fi", "no", "dk", "at", "be"]
 
     def __init__(
@@ -280,12 +283,10 @@ class NitterSearchScraper:
                 return None
             tweet_id = match.group(1)
             
-            # Extract author from href (format: /username/status/id)
-            author_match = re.match(r'^/([^/]+)/', href)
-            author = author_match.group(1) if author_match else ""
-            
-            # Build Twitter URL
-            tweet_url = f"https://twitter.com{href}" if href else ""
+            # Extract username from href for URL
+            username_match = re.search(r'^/([^/]+)/', href)
+            tweet_username = username_match.group(1) if username_match else ""
+            tweet_url = f"https://twitter.com/{tweet_username}/status/{tweet_id}" if tweet_username else ""
 
             content_elem = tweet_elem.select_one('.tweet-content')
             content = content_elem.get_text(strip=True) if content_elem else ""
@@ -293,17 +294,17 @@ class NitterSearchScraper:
             time_elem = tweet_elem.select_one('.tweet-date a')
             timestamp = time_elem.get('title', '') if time_elem else ""
             
-            # Extract images
+            # Extract images from tweet
             images = []
-            image_elems = tweet_elem.select('.attachment.image img, .still-image img, .gallery-row img')
-            for img in image_elems:
-                src = img.get('src', '')
-                if src:
-                    # Convert Nitter proxy URL to Twitter URL if possible
-                    if '/pic/' in src:
-                        # Nitter uses /pic/encoded_url format
-                        images.append(src)
-                    else:
+            media_container = tweet_elem.select_one('.attachments')
+            if media_container:
+                img_elems = media_container.select('img')
+                for img in img_elems:
+                    src = img.get('src', '')
+                    if src and '/pic/' in src:
+                        # Nitter proxies images, extract the real URL
+                        images.append(f"{self.nitter_url}{src}")
+                    elif src:
                         images.append(src)
 
             stats = tweet_elem.select('.tweet-stat')
@@ -345,7 +346,6 @@ class NitterSearchScraper:
                 replies=replies,
                 is_retweet=is_retweet,
                 is_reply=is_reply,
-                author=author,
             )
         except Exception as e:
             logger.error(f"Error parsing tweet: {e}")

@@ -1,0 +1,54 @@
+version: '3.8'
+
+# Production Docker Compose for VPS deployment
+# Uses environment variables for configuration
+
+services:
+  # Redis for Nitter caching
+  nitter-redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nitter - Twitter frontend proxy
+  nitter:
+    image: zedeus/nitter:latest
+    restart: always
+    volumes:
+      - ./nitter.conf:/src/nitter.conf:ro
+      - ./sessions.jsonl:/src/sessions.jsonl:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      nitter-redis:
+        condition: service_healthy
+    environment:
+      - NITTER_CONFIG=/src/nitter.conf
+
+  # Hyperdrive - Tweet Analyzer App
+  hyperdrive:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NITTER_URL=http://nitter:8080
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DOCKER_COMPOSE_PATH=/app/deploy
+    depends_on:
+      - nitter
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  redis-data:
+

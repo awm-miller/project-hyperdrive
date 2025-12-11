@@ -19,7 +19,7 @@ async def main():
         delay_seconds=0.5,
         max_retweets=50000,
         max_restarts=100,
-        docker_compose_path='C:\\Users\\Alex\\GitHub\\project-hyperdrive',
+        docker_compose_path='.',
     ) as scraper:
         result = await scraper.scrape_retweets(username="elonmusk")
         

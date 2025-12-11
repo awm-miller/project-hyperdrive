@@ -59,7 +59,11 @@ class ScrapeResult:
 class NitterTimelineScraper:
     """Scrapes retweets from user timeline with rate limit handling."""
 
-    MULLVAD_CLI = r"C:\Program Files\Mullvad VPN\resources\mullvad.exe"
+    # Mullvad CLI path - auto-detect OS, override with MULLVAD_CLI env var
+    if os.name == 'nt':  # Windows
+        MULLVAD_CLI = os.getenv("MULLVAD_CLI", r"C:\Program Files\Mullvad VPN\resources\mullvad.exe")
+    else:  # Linux/Mac
+        MULLVAD_CLI = os.getenv("MULLVAD_CLI", "/usr/bin/mullvad")
     VPN_COUNTRIES = ["us", "gb", "de", "nl", "se", "ch", "ca", "fr", "jp", "au", "sg", "br", "it", "es", "pl", "fi", "no", "dk", "at", "be"]
 
     def __init__(
@@ -272,8 +276,10 @@ class NitterTimelineScraper:
                 return None
             tweet_id = match.group(1)
             
-            # Build Twitter URL
-            tweet_url = f"https://twitter.com{href}" if href else ""
+            # Extract username from href for URL
+            username_match = re.search(r'^/([^/]+)/', href)
+            tweet_username = username_match.group(1) if username_match else ""
+            tweet_url = f"https://twitter.com/{tweet_username}/status/{tweet_id}" if tweet_username else ""
 
             # Get original author from the tweet body
             username_elem = tweet_elem.select_one('.tweet-body .username')
@@ -287,11 +293,15 @@ class NitterTimelineScraper:
             
             # Extract images
             images = []
-            image_elems = tweet_elem.select('.attachment.image img, .still-image img, .gallery-row img')
-            for img in image_elems:
-                src = img.get('src', '')
-                if src:
-                    images.append(src)
+            media_container = tweet_elem.select_one('.attachments')
+            if media_container:
+                img_elems = media_container.select('img')
+                for img in img_elems:
+                    src = img.get('src', '')
+                    if src and '/pic/' in src:
+                        images.append(f"{self.nitter_url}{src}")
+                    elif src:
+                        images.append(src)
 
             stats = tweet_elem.select('.tweet-stat')
             replies = retweets = quotes = likes = 0
