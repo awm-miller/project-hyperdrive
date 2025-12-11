@@ -530,6 +530,10 @@
                         <div class="stat-value" id="rtCount">0</div>
                         <div class="stat-label">Retweets</div>
                     </div>
+                    <div class="stat">
+                        <div class="stat-value" id="chunkCount">1</div>
+                        <div class="stat-label">AI Chunks</div>
+                    </div>
                 </div>
             </div>
 
@@ -541,6 +545,13 @@
             </div>
 
             <div class="analysis-content" id="analysisContent"></div>
+
+            <div class="highlighted-section" id="highlightedSection" style="display:none; margin-top: 2rem;">
+                <h3 style="font-size: 1.1rem; color: var(--accent-cyan); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                    📌 Highlighted Tweets (<span id="highlightedCount">0</span>)
+                </h3>
+                <div id="highlightedList" style="display: flex; flex-direction: column; gap: 1rem;"></div>
+            </div>
         </div>
 
         <footer>
@@ -555,6 +566,7 @@
         const results = document.getElementById('results');
         const tweetCount = document.getElementById('tweetCount');
         const rtCount = document.getElementById('rtCount');
+        const chunkCount = document.getElementById('chunkCount');
         const themesList = document.getElementById('themesList');
         const themesSection = document.getElementById('themesSection');
         const analysisContent = document.getElementById('analysisContent');
@@ -670,6 +682,7 @@
                 // Display stats
                 tweetCount.textContent = data.tweets_scraped;
                 rtCount.textContent = data.retweets_scraped;
+                chunkCount.textContent = data.chunks_processed || 1;
 
                 // Show errors/warnings if any
                 if (data.error) {
@@ -691,6 +704,32 @@
 
                 // Display analysis
                 analysisContent.innerHTML = formatAnalysis(data.analysis);
+
+                // Display highlighted tweets
+                const highlightedSection = document.getElementById('highlightedSection');
+                const highlightedList = document.getElementById('highlightedList');
+                const highlightedCount = document.getElementById('highlightedCount');
+                
+                if (data.highlighted_tweets && data.highlighted_tweets.length > 0) {
+                    highlightedSection.style.display = 'block';
+                    highlightedCount.textContent = data.highlighted_tweets.length;
+                    highlightedList.innerHTML = data.highlighted_tweets
+                        .map((tweet, i) => `
+                            <div style="background: var(--bg-tertiary); border-left: 3px solid var(--accent-purple); padding: 1rem 1.25rem; border-radius: 8px;">
+                                <div style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 0.5rem;">"${tweet.text}"</div>
+                                ${tweet.reason ? `<div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;">↳ ${tweet.reason}</div>` : ''}
+                                ${tweet.images && tweet.images.length > 0 ? `
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.75rem 0;">
+                                        ${tweet.images.map(img => `<img src="${img}" style="max-width: 200px; max-height: 150px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'" />`).join('')}
+                                    </div>
+                                ` : ''}
+                                ${tweet.url ? `<a href="${tweet.url}" target="_blank" style="font-size: 0.8rem; color: var(--accent-cyan); text-decoration: none;">🔗 View on Twitter</a>` : ''}
+                            </div>
+                        `)
+                        .join('');
+                } else {
+                    highlightedSection.style.display = 'none';
+                }
 
                 results.classList.add('visible');
 

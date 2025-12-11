@@ -35,6 +35,8 @@ class Tweet:
     id: str
     content: str
     timestamp: str
+    url: str = ""
+    images: list = field(default_factory=list)
     original_author: str = ""  # For retweets, the original author
     retweets: int = 0
     quotes: int = 0
@@ -269,6 +271,9 @@ class NitterTimelineScraper:
             if not match:
                 return None
             tweet_id = match.group(1)
+            
+            # Build Twitter URL
+            tweet_url = f"https://twitter.com{href}" if href else ""
 
             # Get original author from the tweet body
             username_elem = tweet_elem.select_one('.tweet-body .username')
@@ -279,6 +284,14 @@ class NitterTimelineScraper:
 
             time_elem = tweet_elem.select_one('.tweet-date a')
             timestamp = time_elem.get('title', '') if time_elem else ""
+            
+            # Extract images
+            images = []
+            image_elems = tweet_elem.select('.attachment.image img, .still-image img, .gallery-row img')
+            for img in image_elems:
+                src = img.get('src', '')
+                if src:
+                    images.append(src)
 
             stats = tweet_elem.select('.tweet-stat')
             replies = retweets = quotes = likes = 0
@@ -305,6 +318,8 @@ class NitterTimelineScraper:
                 id=tweet_id,
                 content=content,
                 timestamp=timestamp,
+                url=tweet_url,
+                images=images,
                 original_author=original_author,
                 retweets=retweets,
                 quotes=quotes,

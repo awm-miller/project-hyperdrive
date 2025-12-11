@@ -34,12 +34,15 @@ class Tweet:
     id: str
     content: str
     timestamp: str
+    url: str = ""
+    images: list = field(default_factory=list)
     retweets: int = 0
     quotes: int = 0
     likes: int = 0
     replies: int = 0
     is_retweet: bool = False
     is_reply: bool = False
+    author: str = ""
 
 
 @dataclass
@@ -276,12 +279,32 @@ class NitterSearchScraper:
             if not match:
                 return None
             tweet_id = match.group(1)
+            
+            # Extract author from href (format: /username/status/id)
+            author_match = re.match(r'^/([^/]+)/', href)
+            author = author_match.group(1) if author_match else ""
+            
+            # Build Twitter URL
+            tweet_url = f"https://twitter.com{href}" if href else ""
 
             content_elem = tweet_elem.select_one('.tweet-content')
             content = content_elem.get_text(strip=True) if content_elem else ""
 
             time_elem = tweet_elem.select_one('.tweet-date a')
             timestamp = time_elem.get('title', '') if time_elem else ""
+            
+            # Extract images
+            images = []
+            image_elems = tweet_elem.select('.attachment.image img, .still-image img, .gallery-row img')
+            for img in image_elems:
+                src = img.get('src', '')
+                if src:
+                    # Convert Nitter proxy URL to Twitter URL if possible
+                    if '/pic/' in src:
+                        # Nitter uses /pic/encoded_url format
+                        images.append(src)
+                    else:
+                        images.append(src)
 
             stats = tweet_elem.select('.tweet-stat')
             replies = retweets = quotes = likes = 0
@@ -314,12 +337,15 @@ class NitterSearchScraper:
                 id=tweet_id,
                 content=content,
                 timestamp=timestamp,
+                url=tweet_url,
+                images=images,
                 retweets=retweets,
                 quotes=quotes,
                 likes=likes,
                 replies=replies,
                 is_retweet=is_retweet,
                 is_reply=is_reply,
+                author=author,
             )
         except Exception as e:
             logger.error(f"Error parsing tweet: {e}")

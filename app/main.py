@@ -117,6 +117,14 @@ class ScrapeResponse(BaseModel):
     restarts: int = 0
 
 
+class HighlightedTweet(BaseModel):
+    """A notable tweet picked by AI."""
+    text: str
+    reason: str = ""
+    url: str = ""
+    images: list[str] = []
+
+
 class AnalyzeResponse(BaseModel):
     """Response for analysis endpoint."""
     username: str
@@ -124,6 +132,8 @@ class AnalyzeResponse(BaseModel):
     retweets_scraped: int
     analysis: str
     themes: list[str]
+    highlighted_tweets: list[HighlightedTweet] = []
+    chunks_processed: int = 1
     error: Optional[str] = None
     rate_limited: bool = False
 
@@ -345,6 +355,17 @@ async def analyze_tweets(request: AnalyzeRequest):
     # Step 3: Compile and analyze with Gemini
     logger.info(f"[Step 3] Analyzing {len(all_tweets)} total items with Gemini...")
     
+    # Build lookup for tweet content -> tweet data (for matching highlighted tweets later)
+    tweet_lookup = {}
+    for t in all_tweets:
+        # Use first 100 chars of content as key for matching
+        key = t.content[:100].lower().strip() if t.content else ""
+        if key:
+            tweet_lookup[key] = {
+                "url": getattr(t, 'url', ''),
+                "images": getattr(t, 'images', []),
+            }
+    
     # Compile tweets for analysis
     compiled_lines = []
     for t in all_tweets:
@@ -369,12 +390,38 @@ async def analyze_tweets(request: AnalyzeRequest):
         logger.error(f"Gemini error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+    # Match highlighted tweets to their URLs and images
+    highlighted_with_urls = []
+    for ht in analysis_result.highlighted_tweets:
+        text = ht.get("text", "")
+        reason = ht.get("reason", "")
+        
+        # Try to find matching tweet by content prefix
+        key = text[:100].lower().strip() if text else ""
+        matched = tweet_lookup.get(key, {})
+        
+        # Also try fuzzy matching if exact match fails
+        if not matched and text:
+            for lookup_key, data in tweet_lookup.items():
+                if lookup_key[:50] in text[:60].lower() or text[:50].lower() in lookup_key[:60]:
+                    matched = data
+                    break
+        
+        highlighted_with_urls.append(HighlightedTweet(
+            text=text,
+            reason=reason,
+            url=matched.get("url", ""),
+            images=matched.get("images", []),
+        ))
+
     return AnalyzeResponse(
         username=username,
         tweets_scraped=tweets_count,
         retweets_scraped=retweets_count,
         analysis=analysis_result.summary,
         themes=analysis_result.themes,
+        highlighted_tweets=highlighted_with_urls,
+        chunks_processed=analysis_result.chunks_processed,
         error=analysis_result.error,
     )
 
