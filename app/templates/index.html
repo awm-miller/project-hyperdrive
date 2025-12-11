@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nitter Tweet Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #050508;
+            --bg-secondary: #0c0c12;
+            --bg-tertiary: #141420;
+            --bg-card: #0f0f18;
+            --accent-cyan: #00e5ff;
+            --accent-purple: #a855f7;
+            --accent-pink: #ec4899;
+            --accent-gradient: linear-gradient(135deg, #00e5ff 0%, #a855f7 50%, #ec4899 100%);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #475569;
+            --border-color: #1e293b;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(ellipse at 0% 0%, rgba(0, 229, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 100% 100%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(236, 72, 153, 0.03) 0%, transparent 70%);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 2rem 0 3rem;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-top: 0.5rem;
+            font-weight: 400;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.1);
+        }
+
+        input::placeholder {
+            color: var(--text-muted);
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .checkbox-group {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent-cyan);
+            cursor: pointer;
+        }
+
+        .checkbox-item span {
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 1rem 2rem;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0, 229, 255, 0.25);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Progress Steps */
+        .progress-container {
+            display: none;
+            margin-bottom: 1.5rem;
+        }
+
+        .progress-container.visible {
+            display: block;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s;
+        }
+
+        .progress-step.active {
+            border-left: 3px solid var(--accent-cyan);
+            background: rgba(0, 229, 255, 0.05);
+        }
+
+        .progress-step.complete {
+            border-left: 3px solid var(--success);
+            background: rgba(34, 197, 94, 0.05);
+        }
+
+        .progress-step.error {
+            border-left: 3px solid var(--error);
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .step-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+
+        .step-icon.spinner {
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .step-icon.check {
+            color: var(--success);
+        }
+
+        .step-icon.x {
+            color: var(--error);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .step-detail {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Results */
+        #results {
+            display: none;
+        }
+
+        #results.visible {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .results-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .stats {
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .stat {
+            text-align: right;
+        }
+
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.25rem;
+            font-weight: 600;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .themes-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .themes-section h3 {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .themes-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .theme-tag {
+            padding: 0.375rem 0.875rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .analysis-content {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            line-height: 1.8;
+            font-size: 0.95rem;
+        }
+
+        .analysis-content h1,
+        .analysis-content h2,
+        .analysis-content h3 {
+            color: var(--accent-cyan);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .analysis-content h1:first-child,
+        .analysis-content h2:first-child,
+        .analysis-content h3:first-child {
+            margin-top: 0;
+        }
+
+        .analysis-content strong {
+            color: var(--accent-cyan);
+        }
+
+        .analysis-content ul,
+        .analysis-content ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .analysis-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            border-radius: 8px;
+            padding: 1rem;
+            color: var(--error);
+            margin-bottom: 1rem;
+        }
+
+        .warning-message {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--warning);
+            border-radius: 8px;
+            padding: 1rem;
+            color: var(--warning);
+            margin-bottom: 1rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .logo {
+                font-size: 2rem;
+            }
+
+            .card {
+                padding: 1.25rem;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .stats {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .stat {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">HYPERDRIVE</div>
+            <p class="subtitle">Twitter Profile Analyzer • Powered by Nitter + Gemini</p>
+        </header>
+
+        <div class="card">
+            <form id="analyzeForm">
+                <div class="form-group">
+                    <label for="username">Twitter Username</label>
+                    <input type="text" id="username" name="username" placeholder="elonmusk" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="startDate">Start Date</label>
+                        <input type="date" id="startDate" name="startDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate">End Date</label>
+                        <input type="date" id="endDate" name="endDate">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Include in Analysis</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="includeTweets" name="includeTweets" checked>
+                            <span>Original Tweets</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="includeRetweets" name="includeRetweets" checked>
+                            <span>Retweets</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" id="includeReplies" name="includeReplies" checked>
+                            <span>Replies</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="customPrompt">Custom Analysis Prompt (optional)</label>
+                    <textarea id="customPrompt" name="customPrompt" placeholder="Leave empty for default analysis. Example: 'Analyze the political sentiment and key topics discussed.'"></textarea>
+                </div>
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-step" id="step1">
+                        <div class="step-icon" id="step1Icon">1</div>
+                        <div class="step-content">
+                            <div class="step-title">Scraping Retweets</div>
+                            <div class="step-detail" id="step1Detail">From timeline (as far back as possible)</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="step2">
+                        <div class="step-icon" id="step2Icon">2</div>
+                        <div class="step-content">
+                            <div class="step-title">Scraping Tweets & Replies</div>
+                            <div class="step-detail" id="step2Detail">For selected date range</div>
+                        </div>
+                    </div>
+                    <div class="progress-step" id="step3">
+                        <div class="step-icon" id="step3Icon">3</div>
+                        <div class="step-content">
+                            <div class="step-title">Gemini Analysis</div>
+                            <div class="step-detail" id="step3Detail">Generating report</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    🚀 Analyze Profile
+                </button>
+            </form>
+        </div>
+
+        <div id="results" class="card">
+            <div class="results-header">
+                <h2>Analysis Results</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value" id="tweetCount">0</div>
+                        <div class="stat-label">Tweets</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="rtCount">0</div>
+                        <div class="stat-label">Retweets</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="errorContainer"></div>
+
+            <div class="themes-section" id="themesSection">
+                <h3>Key Themes</h3>
+                <div class="themes-list" id="themesList"></div>
+            </div>
+
+            <div class="analysis-content" id="analysisContent"></div>
+        </div>
+
+        <footer>
+            HYPERDRIVE • Nitter + Gemini AI
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('analyzeForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const results = document.getElementById('results');
+        const tweetCount = document.getElementById('tweetCount');
+        const rtCount = document.getElementById('rtCount');
+        const themesList = document.getElementById('themesList');
+        const themesSection = document.getElementById('themesSection');
+        const analysisContent = document.getElementById('analysisContent');
+        const errorContainer = document.getElementById('errorContainer');
+
+        // Set default dates (last year)
+        const today = new Date();
+        const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+        document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        document.getElementById('startDate').value = lastYear.toISOString().split('T')[0];
+
+        function setStepState(stepNum, state, detail = null) {
+            const step = document.getElementById(`step${stepNum}`);
+            const icon = document.getElementById(`step${stepNum}Icon`);
+            const detailEl = document.getElementById(`step${stepNum}Detail`);
+
+            step.classList.remove('active', 'complete', 'error');
+            icon.classList.remove('spinner');
+            
+            if (state === 'active') {
+                step.classList.add('active');
+                icon.classList.add('spinner');
+                icon.textContent = '';
+            } else if (state === 'complete') {
+                step.classList.add('complete');
+                icon.textContent = '✓';
+            } else if (state === 'error') {
+                step.classList.add('error');
+                icon.textContent = '✗';
+            } else {
+                icon.textContent = stepNum;
+            }
+
+            if (detail) {
+                detailEl.textContent = detail;
+            }
+        }
+
+        function formatAnalysis(text) {
+            return text
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/^/, '<p>')
+                .replace(/$/, '</p>');
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            if (!username) return;
+
+            // Reset UI
+            submitBtn.disabled = true;
+            results.classList.remove('visible');
+            errorContainer.innerHTML = '';
+            progressContainer.classList.add('visible');
+            
+            // Reset steps
+            setStepState(1, 'pending');
+            setStepState(2, 'pending');
+            setStepState(3, 'pending');
+
+            const payload = {
+                username: username,
+                start_date: document.getElementById('startDate').value || null,
+                end_date: document.getElementById('endDate').value || null,
+                include_tweets: document.getElementById('includeTweets').checked,
+                include_retweets: document.getElementById('includeRetweets').checked,
+                include_replies: document.getElementById('includeReplies').checked,
+                max_tweets: 10000,
+            };
+
+            const customPrompt = document.getElementById('customPrompt').value.trim();
+            if (customPrompt) {
+                payload.custom_prompt = customPrompt;
+            }
+
+            try {
+                // Step 1: Start
+                if (payload.include_retweets) {
+                    setStepState(1, 'active', 'Fetching retweets from timeline...');
+                } else {
+                    setStepState(1, 'complete', 'Skipped (not selected)');
+                }
+
+                // Make the API call
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                // During the call, we can't track progress in real-time
+                // So we'll show all steps as complete when done
+                
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Analysis failed');
+                }
+
+                // Update step states
+                setStepState(1, 'complete', `${data.retweets_scraped} retweets collected`);
+                setStepState(2, 'complete', `${data.tweets_scraped} tweets/replies collected`);
+                setStepState(3, 'complete', 'Analysis complete');
+
+                // Display stats
+                tweetCount.textContent = data.tweets_scraped;
+                rtCount.textContent = data.retweets_scraped;
+
+                // Show errors/warnings if any
+                if (data.error) {
+                    errorContainer.innerHTML += `<div class="warning-message">${data.error}</div>`;
+                }
+                if (data.rate_limited) {
+                    errorContainer.innerHTML += `<div class="warning-message">Some data may be incomplete due to rate limiting</div>`;
+                }
+
+                // Display themes
+                if (data.themes && data.themes.length > 0) {
+                    themesSection.style.display = 'block';
+                    themesList.innerHTML = data.themes
+                        .map(theme => `<span class="theme-tag">${theme}</span>`)
+                        .join('');
+                } else {
+                    themesSection.style.display = 'none';
+                }
+
+                // Display analysis
+                analysisContent.innerHTML = formatAnalysis(data.analysis);
+
+                results.classList.add('visible');
+
+            } catch (error) {
+                setStepState(1, 'error');
+                setStepState(2, 'error');
+                setStepState(3, 'error');
+                errorContainer.innerHTML = `<div class="error-message">${error.message}</div>`;
+                results.classList.add('visible');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
