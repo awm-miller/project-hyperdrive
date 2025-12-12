@@ -167,6 +167,52 @@ async def health_check():
     )
 
 
+@app.get("/api/logs")
+async def get_logs(lines: int = 100):
+    """Get recent app logs."""
+    import subprocess
+    try:
+        # Try to read the app.log file
+        log_file = "app.log"
+        if os.path.exists(log_file):
+            with open(log_file, "r") as f:
+                all_lines = f.readlines()
+                recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
+                return {"logs": "".join(recent), "total_lines": len(all_lines)}
+        else:
+            return {"logs": "No log file found", "total_lines": 0}
+    except Exception as e:
+        return {"logs": f"Error reading logs: {str(e)}", "total_lines": 0}
+
+
+@app.get("/api/status")
+async def get_status():
+    """Get system status including VPN and Docker."""
+    import subprocess
+    status = {
+        "app": "running",
+        "vpn": "unknown",
+        "nitter": "unknown",
+    }
+    
+    try:
+        # Check Mullvad status
+        result = subprocess.run(["mullvad", "status"], capture_output=True, text=True, timeout=5)
+        status["vpn"] = result.stdout.strip().split('\n')[0] if result.returncode == 0 else "not installed"
+    except:
+        status["vpn"] = "not available"
+    
+    try:
+        # Check if Nitter is responding
+        import httpx
+        resp = httpx.get(f"{NITTER_URL}/", timeout=5)
+        status["nitter"] = "running" if resp.status_code == 200 else f"error: {resp.status_code}"
+    except Exception as e:
+        status["nitter"] = f"error: {str(e)}"
+    
+    return status
+
+
 @app.post("/api/scrape/search", response_model=ScrapeResponse)
 async def scrape_search(request: ScrapeSearchRequest):
     """

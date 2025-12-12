@@ -443,6 +443,58 @@
             font-weight: 700;
         }
 
+        /* Status Panel */
+        .status-panel {
+            margin-top: 2rem;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-dim);
+            padding: 1.5rem;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .status-item {
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid var(--border-dim);
+        }
+
+        .status-label {
+            display: block;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .status-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--hyper-blue);
+        }
+
+        .small-btn {
+            background: transparent;
+            border: 1px solid var(--hyper-blue);
+            color: var(--hyper-blue);
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .small-btn:hover {
+            background: var(--hyper-blue);
+            color: #000;
+        }
+
         /* Hyperspace Animation Classes */
         body.in-hyperspace .hyperdrive-streaks {
             display: block;
@@ -549,6 +601,32 @@
 
             <label style="margin-top:2rem;">Highlighted Tweets</label>
             <div id="highlightsGrid"></div>
+        </div>
+
+        <!-- Status & Logs Panel -->
+        <div class="status-panel" id="statusPanel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h3 style="font-family:'Space Mono'; color:var(--hyper-blue); margin:0;">System Status</h3>
+                <button onclick="toggleLogs()" class="small-btn">Show Logs</button>
+            </div>
+            <div class="status-grid">
+                <div class="status-item">
+                    <span class="status-label">App</span>
+                    <span class="status-value" id="statusApp">--</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">VPN</span>
+                    <span class="status-value" id="statusVpn">--</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Nitter</span>
+                    <span class="status-value" id="statusNitter">--</span>
+                </div>
+            </div>
+            <div id="logsContainer" style="display:none; margin-top:1rem;">
+                <pre id="logsContent" style="background:#111; padding:1rem; max-height:300px; overflow-y:auto; font-size:0.75rem; color:#0f0; border:1px solid var(--border-dim);"></pre>
+                <button onclick="refreshLogs()" class="small-btn" style="margin-top:0.5rem;">Refresh Logs</button>
+            </div>
         </div>
     </div>
 
@@ -764,6 +842,46 @@
                 alert(err.message);
             }
         });
+
+        // Status & Logs Functions
+        async function refreshStatus() {
+            try {
+                const resp = await fetch('/api/status');
+                const data = await resp.json();
+                document.getElementById('statusApp').textContent = data.app || '--';
+                document.getElementById('statusVpn').textContent = data.vpn || '--';
+                document.getElementById('statusNitter').textContent = data.nitter || '--';
+            } catch (e) {
+                console.error('Status fetch failed:', e);
+            }
+        }
+
+        async function refreshLogs() {
+            try {
+                const resp = await fetch('/api/logs?lines=200');
+                const data = await resp.json();
+                document.getElementById('logsContent').textContent = data.logs || 'No logs';
+                // Scroll to bottom
+                const logsEl = document.getElementById('logsContent');
+                logsEl.scrollTop = logsEl.scrollHeight;
+            } catch (e) {
+                document.getElementById('logsContent').textContent = 'Error fetching logs: ' + e.message;
+            }
+        }
+
+        function toggleLogs() {
+            const container = document.getElementById('logsContainer');
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                refreshLogs();
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        // Auto-refresh status every 10 seconds
+        refreshStatus();
+        setInterval(refreshStatus, 10000);
     </script>
 </body>
 </html>
