@@ -147,6 +147,7 @@ class Worker:
                     url_to_images[url] = getattr(t, 'images', [])
             
             # Compile tweets - include URL for each tweet
+            # No truncation - the analyzer handles chunking internally
             compiled_lines = []
             for t in all_tweets:
                 url = getattr(t, 'url', '')
@@ -158,9 +159,7 @@ class Worker:
                 compiled_lines.append(line)
             compiled = "\n---\n".join(compiled_lines)
             
-            # Truncate if needed
-            if len(compiled) > 100000:
-                compiled = compiled[:100000] + "\n\n[TRUNCATED]"
+            logger.info(f"Compiled {len(all_tweets)} tweets into {len(compiled):,} characters")
             
             # Run Gemini analysis
             analyzer = GeminiAnalyzer(api_key=self.gemini_key)

@@ -312,6 +312,51 @@
             text-align: center;
             color: #666;
         }
+
+        /* Console Panel - Fixed Bottom Left */
+        .console-toggle {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-dim);
+            color: #666;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            z-index: 1000;
+            text-transform: uppercase;
+        }
+        .console-toggle:hover {
+            border-color: var(--hyper-blue);
+            color: var(--hyper-blue);
+        }
+        .console-panel {
+            position: fixed;
+            bottom: 60px;
+            left: 20px;
+            width: 500px;
+            max-height: 300px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-dim);
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            z-index: 1000;
+            display: none;
+        }
+        .console-panel.visible {
+            display: block;
+        }
+        .console-content {
+            padding: 0.75rem;
+            max-height: 280px;
+            overflow-y: auto;
+            color: #0f0;
+            background: #000;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -377,7 +422,7 @@
         </div>
     </div>
 
-    <!-- Job Dashboard -->
+    <!-- Job Dashboard - Bottom Right -->
     <div class="job-dashboard">
         <div class="dashboard-header">
             <span>JOBS</span>
@@ -395,6 +440,12 @@
         <div class="jobs-list" id="jobsList">
             <div class="no-jobs">No jobs submitted yet</div>
         </div>
+    </div>
+
+    <!-- Console Panel - Bottom Left -->
+    <button class="console-toggle" id="consoleToggle" onclick="toggleConsole()">Console</button>
+    <div class="console-panel" id="consolePanel">
+        <div class="console-content" id="consoleContent">Waiting for logs...</div>
     </div>
 
     <script>
@@ -600,6 +651,44 @@
         // Initial render and start polling
         renderJobsList();
         setInterval(pollJobs, 2000);
+
+        // Console toggle and log fetching
+        let consoleVisible = false;
+        let logPollInterval = null;
+
+        function toggleConsole() {
+            const panel = document.getElementById('consolePanel');
+            const btn = document.getElementById('consoleToggle');
+            consoleVisible = !consoleVisible;
+            
+            if (consoleVisible) {
+                panel.classList.add('visible');
+                btn.style.borderColor = 'var(--hyper-blue)';
+                btn.style.color = 'var(--hyper-blue)';
+                fetchLogs();
+                logPollInterval = setInterval(fetchLogs, 2000);
+            } else {
+                panel.classList.remove('visible');
+                btn.style.borderColor = '';
+                btn.style.color = '';
+                if (logPollInterval) {
+                    clearInterval(logPollInterval);
+                    logPollInterval = null;
+                }
+            }
+        }
+
+        async function fetchLogs() {
+            try {
+                const resp = await fetch('/api/logs?lines=100');
+                const data = await resp.json();
+                const content = document.getElementById('consoleContent');
+                content.textContent = data.logs || 'No logs available';
+                content.scrollTop = content.scrollHeight;
+            } catch (e) {
+                document.getElementById('consoleContent').textContent = 'Error fetching logs';
+            }
+        }
     </script>
 </body>
 </html>
