@@ -78,6 +78,7 @@ class JobQueue:
     
     JOBS_KEY = "hyperdrive:jobs"  # Hash of all jobs
     QUEUE_KEY = "hyperdrive:queue"  # List of pending job IDs
+    WORKERS_KEY = "hyperdrive:workers"  # Hash of active workers
     
     def __init__(self, redis_url: str = "redis://localhost:6379"):
         """
@@ -235,4 +236,51 @@ class JobQueue:
         self.redis.delete(self.JOBS_KEY)
         self.redis.delete(self.QUEUE_KEY)
         logger.warning("Cleared all jobs")
+    
+    def register_worker(self, worker_id: str, nitter_url: str) -> None:
+        """Register a worker as active."""
+        data = {
+            "id": worker_id,
+            "nitter_url": nitter_url,
+            "last_seen": datetime.now().isoformat(),
+            "status": "idle"
+        }
+        self.redis.hset(self.WORKERS_KEY, worker_id, json.dumps(data))
+        # Set expiry on worker key (30 seconds)
+        self.redis.expire(self.WORKERS_KEY, 60)
+    
+    def worker_heartbeat(self, worker_id: str, status: str = "idle", current_job: str = None) -> None:
+        """Update worker heartbeat."""
+        existing = self.redis.hget(self.WORKERS_KEY, worker_id)
+        if existing:
+            data = json.loads(existing)
+        else:
+            data = {"id": worker_id}
+        
+        data["last_seen"] = datetime.now().isoformat()
+        data["status"] = status
+        data["current_job"] = current_job
+        self.redis.hset(self.WORKERS_KEY, worker_id, json.dumps(data))
+    
+    def get_active_workers(self) -> List[Dict[str, Any]]:
+        """Get list of active workers."""
+        workers = []
+        all_workers = self.redis.hgetall(self.WORKERS_KEY)
+        now = datetime.now()
+        
+        for worker_data in all_workers.values():
+            try:
+                data = json.loads(worker_data)
+                # Check if worker is still alive (seen in last 30 seconds)
+                last_seen = datetime.fromisoformat(data.get("last_seen", "2000-01-01"))
+                if (now - last_seen).total_seconds() < 30:
+                    workers.append(data)
+            except Exception:
+                pass
+        
+        return workers
+    
+    def get_worker_count(self) -> int:
+        """Get count of active workers."""
+        return len(self.get_active_workers())
 

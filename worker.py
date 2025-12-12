@@ -139,24 +139,22 @@ class Worker:
             self.queue.update_progress(job, 70, "Analyzing with Gemini...")
             logger.info(f"[Step 3] Analyzing {len(all_tweets)} tweets with Gemini...")
             
-            # Build tweet lookup for URL/image matching
-            tweet_lookup = {}
+            # Build tweet lookup by URL for image matching
+            url_to_images = {}
             for t in all_tweets:
-                key = t.content[:100].lower().strip() if t.content else ""
-                if key:
-                    tweet_lookup[key] = {
-                        "url": getattr(t, 'url', ''),
-                        "images": getattr(t, 'images', []),
-                    }
+                url = getattr(t, 'url', '')
+                if url:
+                    url_to_images[url] = getattr(t, 'images', [])
             
-            # Compile tweets
+            # Compile tweets - include URL for each tweet
             compiled_lines = []
             for t in all_tweets:
+                url = getattr(t, 'url', '')
                 if getattr(t, 'is_retweet', False):
                     original_author = getattr(t, 'original_author', 'unknown')
-                    line = f"[RETWEET of @{original_author}] [{t.timestamp}] {t.content}"
+                    line = f"[RETWEET of @{original_author}] [{t.timestamp}] {t.content} [URL: {url}]"
                 else:
-                    line = f"[{t.timestamp}] {t.content}"
+                    line = f"[{t.timestamp}] {t.content} [URL: {url}]"
                 compiled_lines.append(line)
             compiled = "\n---\n".join(compiled_lines)
             
@@ -175,25 +173,21 @@ class Worker:
             
             self.queue.update_progress(job, 90, "Finalizing...")
             
-            # Match highlighted tweets to URLs
+            # Process highlighted tweets - extract URLs and match images
             highlighted_with_urls = []
             for ht in analysis_result.highlighted_tweets:
                 text = ht.get("text", "")
                 reason = ht.get("reason", "")
-                key = text[:100].lower().strip() if text else ""
-                matched = tweet_lookup.get(key, {})
+                url = ht.get("url", "")  # Gemini should return this now
                 
-                if not matched and text:
-                    for lookup_key, data in tweet_lookup.items():
-                        if lookup_key[:50] in text[:60].lower() or text[:50].lower() in lookup_key[:60]:
-                            matched = data
-                            break
+                # Get images for this URL
+                images = url_to_images.get(url, []) if url else []
                 
                 highlighted_with_urls.append({
                     "text": text,
                     "reason": reason,
-                    "url": matched.get("url", ""),
-                    "images": matched.get("images", []),
+                    "url": url,
+                    "images": images,
                 })
             
             # Complete the job
@@ -226,13 +220,22 @@ class Worker:
         logger.info(f"{'='*60}")
         logger.info(f"Polling for jobs...")
         
+        # Register worker
+        self.queue.register_worker(self.worker_id, self.nitter_url)
+        
         while self.running:
             try:
+                # Send heartbeat
+                self.queue.worker_heartbeat(self.worker_id, "idle")
+                
                 # Get next job (blocks for up to 5 seconds)
                 job = self.queue.get_next_job(self.worker_id)
                 
                 if job:
+                    # Update heartbeat with job info
+                    self.queue.worker_heartbeat(self.worker_id, "busy", job.id)
                     await self.process_job(job)
+                    self.queue.worker_heartbeat(self.worker_id, "idle")
                 else:
                     # No job available, continue polling
                     pass

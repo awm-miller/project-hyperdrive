@@ -347,6 +347,19 @@ async def list_jobs(limit: int = 20):
     )
 
 
+@app.get("/api/workers")
+async def get_workers():
+    """Get active workers."""
+    if not job_queue:
+        return {"workers": [], "count": 0}
+    
+    workers = job_queue.get_active_workers()
+    return {
+        "workers": workers,
+        "count": len(workers)
+    }
+
+
 # ==================== LEGACY DIRECT ENDPOINTS ====================
 
 

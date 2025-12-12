@@ -43,13 +43,17 @@ This is CHUNK {chunk_num} of {total_chunks}.
 
 TASK 1: Analyze the themes and content in these tweets.
 
-TASK 2: Pick out the 10-15 MOST NOTABLE/INTERESTING tweets from this chunk.
-These should be tweets that are:
-- Particularly insightful or revealing
-- Controversial or attention-grabbing
-- Representative of key themes
-- Unusually engaging (high likes/retweets mentioned)
-- Memorable quotes or statements
+TASK 2: Pick out ALL tweets that are interesting, notable, or worth highlighting.
+Each tweet in the data includes a URL in brackets like [URL: https://...].
+Include ANY tweet that is:
+- Insightful or revealing about the person
+- Controversial, spicy, or attention-grabbing
+- Representative of key themes or interests
+- A strong opinion or hot take
+- Funny, witty, or memorable
+- Showing their personality
+
+Be GENEROUS - if in doubt, include it. We want comprehensive coverage.
 
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 
@@ -57,9 +61,9 @@ FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 [Your analysis of themes, tone, key points - 2-3 paragraphs]
 
 ## HIGHLIGHTED TWEETS
-1. "[exact tweet text]" - [brief reason why notable]
-2. "[exact tweet text]" - [brief reason why notable]
-... (10-15 tweets)
+1. "[exact tweet text]" | URL: [copy URL from data] | [brief reason]
+2. "[exact tweet text]" | URL: [copy URL from data] | [brief reason]
+... (include ALL notable tweets - could be 20, 50, or more)
 
 ---
 
@@ -108,12 +112,17 @@ Be direct, insightful, maybe provocative. No fluff.
 
 TASK 2: List 3-5 KEY THEMES as bullet points.
 
-TASK 3: Pick out the 15-20 MOST NOTABLE tweets - the ones that best represent who they are.
-Copy the EXACT tweet text. Include tweets that are:
+TASK 3: Pick out ALL tweets that are interesting, notable, or worth highlighting.
+Each tweet in the data includes a URL in brackets like [URL: https://...].
+Include ANY tweet that is:
 - Spicy, controversial, or attention-grabbing
-- Deeply revealing of their worldview
-- Representative of their main obsessions
-- Particularly viral or engagement-heavy
+- Revealing of their worldview or personality
+- Representative of their interests or obsessions
+- A strong opinion or hot take
+- Funny, witty, or memorable
+- Shows who they really are
+
+Be GENEROUS - if in doubt, include it. We want comprehensive coverage, not a tiny selection.
 
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 
@@ -126,9 +135,9 @@ FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 (3-5 themes)
 
 ## HIGHLIGHTED TWEETS
-1. "[EXACT tweet text copied verbatim]" - [why it's notable, 5-10 words]
-2. "[EXACT tweet text copied verbatim]" - [why it's notable]
-... (15-20 tweets)
+1. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why notable]
+2. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why notable]
+... (include ALL notable tweets - could be 30, 50, 100+)
 
 ---
 
@@ -187,6 +196,7 @@ TWEETS:
 
     def _extract_highlighted_tweets(self, analysis_text: str) -> list[dict]:
         """Extract highlighted tweets from analysis response."""
+        import re
         tweets = []
         lines = analysis_text.split('\n')
         in_highlights = False
@@ -204,26 +214,40 @@ TWEETS:
                 break
             
             # Extract numbered tweets
-            if in_highlights and line_stripped:
-                # Match patterns like: 1. "tweet" - reason  OR  1. tweet - reason
-                import re
-                match = re.match(r'^\d+[\.\)]\s*"?(.+?)"?\s*[-–—]\s*(.+)$', line_stripped)
-                if match:
-                    tweet_text = match.group(1).strip().strip('"')
-                    reason = match.group(2).strip()
-                    if len(tweet_text) > 10:  # Filter out too-short matches
-                        tweets.append({
-                            "text": tweet_text,
-                            "reason": reason
-                        })
-                elif line_stripped.startswith(tuple('0123456789')):
-                    # Simpler pattern - just numbered item
-                    text = re.sub(r'^\d+[\.\)]\s*', '', line_stripped)
-                    if len(text) > 20:
-                        tweets.append({
-                            "text": text,
-                            "reason": ""
-                        })
+            if in_highlights and line_stripped and line_stripped[0].isdigit():
+                # New format: 1. "tweet text" | URL: https://... | reason
+                # Also handle old format: 1. "tweet" - reason
+                
+                # Remove the leading number
+                content = re.sub(r'^\d+[\.\)]\s*', '', line_stripped)
+                
+                # Try to parse new format with URL
+                url_match = re.search(r'\|\s*URL:\s*(https?://[^\s|]+)', content)
+                url = url_match.group(1).strip() if url_match else ""
+                
+                # Extract tweet text (between quotes or before first |)
+                if content.startswith('"'):
+                    text_match = re.match(r'"([^"]+)"', content)
+                    tweet_text = text_match.group(1) if text_match else ""
+                else:
+                    # No quotes - take everything before first |
+                    tweet_text = content.split('|')[0].strip().strip('"')
+                
+                # Extract reason (after last |, or after - if old format)
+                parts = content.split('|')
+                if len(parts) >= 3:
+                    reason = parts[-1].strip()
+                elif ' - ' in content or ' – ' in content or ' — ' in content:
+                    reason = re.split(r'\s*[-–—]\s*', content)[-1]
+                else:
+                    reason = ""
+                
+                if len(tweet_text) > 10:
+                    tweets.append({
+                        "text": tweet_text,
+                        "url": url,
+                        "reason": reason
+                    })
         
         return tweets
 
