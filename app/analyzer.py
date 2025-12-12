@@ -221,9 +221,22 @@ TWEETS:
                 # Remove the leading number
                 content = re.sub(r'^\d+[\.\)]\s*', '', line_stripped)
                 
-                # Try to parse new format with URL
+                # Try multiple URL patterns
+                url = ""
+                # Pattern 1: | URL: https://...
                 url_match = re.search(r'\|\s*URL:\s*(https?://[^\s|]+)', content)
-                url = url_match.group(1).strip() if url_match else ""
+                if url_match:
+                    url = url_match.group(1).strip()
+                else:
+                    # Pattern 2: [URL: https://...]
+                    url_match = re.search(r'\[URL:\s*(https?://[^\]]+)\]', content)
+                    if url_match:
+                        url = url_match.group(1).strip()
+                    else:
+                        # Pattern 3: any twitter/x.com URL
+                        url_match = re.search(r'(https?://(?:twitter\.com|x\.com)/[^\s|,\]]+)', content)
+                        if url_match:
+                            url = url_match.group(1).strip()
                 
                 # Extract tweet text (between quotes or before first |)
                 if content.startswith('"'):

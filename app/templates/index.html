@@ -403,13 +403,13 @@
         <div class="dashboard-header" onclick="toggleDashboard()">
             <span><span class="collapse-icon">▼</span> JOBS</span>
             <div class="dashboard-stats">
-                <div class="stat">
+                <div class="stat" id="queueStat" style="display: none;">
                     <div class="stat-value" id="queueCount">0</div>
-                    <div class="stat-label">Queue</div>
+                    <div class="stat-label">In Queue</div>
                 </div>
                 <div class="stat">
                     <div class="stat-value" id="workerCount">--</div>
-                    <div class="stat-label">Workers</div>
+                    <div class="stat-label">Available</div>
                 </div>
             </div>
         </div>
@@ -574,14 +574,16 @@
             try {
                 const statsResp = await fetch('/api/jobs?limit=1');
                 const statsData = await statsResp.json();
-                document.getElementById('queueCount').textContent = statsData.queue_length;
+                const queueLength = statsData.queue_length || 0;
+                document.getElementById('queueCount').textContent = queueLength;
+                document.getElementById('queueStat').style.display = queueLength > 0 ? 'block' : 'none';
             } catch (e) {}
             
             // Update worker count
             try {
                 const workersResp = await fetch('/api/workers');
                 const workersData = await workersResp.json();
-                document.getElementById('workerCount').textContent = workersData.count;
+                document.getElementById('workerCount').textContent = workersData.count || 0;
             } catch (e) {}
             
             // Update each tracked job
