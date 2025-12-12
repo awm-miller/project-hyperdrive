@@ -495,6 +495,25 @@
             color: #000;
         }
 
+        .toggle-console-btn {
+            display: block;
+            margin: 2rem auto 0;
+            background: transparent;
+            border: 1px solid #444;
+            color: #666;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.5rem 1.5rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .toggle-console-btn:hover {
+            border-color: var(--hyper-blue);
+            color: var(--hyper-blue);
+        }
+
         /* Hyperspace Animation Classes */
         body.in-hyperspace .hyperdrive-streaks {
             display: block;
@@ -603,11 +622,14 @@
             <div id="highlightsGrid"></div>
         </div>
 
+        <!-- Status & Logs Toggle Button -->
+        <button onclick="toggleStatusPanel()" class="toggle-console-btn" id="toggleConsoleBtn">Show Console</button>
+
         <!-- Status & Logs Panel -->
-        <div class="status-panel" id="statusPanel">
+        <div class="status-panel" id="statusPanel" style="display:none;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
                 <h3 style="font-family:'Space Mono'; color:var(--hyper-blue); margin:0;">System Status</h3>
-                <button onclick="toggleLogs()" class="small-btn">Show Logs</button>
+                <button onclick="toggleLogs()" class="small-btn" id="logsToggleBtn">Show Logs</button>
             </div>
             <div class="status-grid">
                 <div class="status-item">
@@ -871,11 +893,27 @@
 
         function toggleLogs() {
             const container = document.getElementById('logsContainer');
+            const btn = document.getElementById('logsToggleBtn');
             if (container.style.display === 'none') {
                 container.style.display = 'block';
+                btn.textContent = 'Hide Logs';
                 refreshLogs();
             } else {
                 container.style.display = 'none';
+                btn.textContent = 'Show Logs';
+            }
+        }
+
+        function toggleStatusPanel() {
+            const panel = document.getElementById('statusPanel');
+            const btn = document.getElementById('toggleConsoleBtn');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                btn.textContent = 'Hide Console';
+                refreshStatus();
+            } else {
+                panel.style.display = 'none';
+                btn.textContent = 'Show Console';
             }
         }
 
