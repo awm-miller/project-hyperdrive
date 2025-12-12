@@ -165,8 +165,39 @@ class NitterTimelineScraper:
             logger.error(f"    VPN error: {e}")
             return False
 
+    def _connect_vpn(self) -> bool:
+        """Connect Mullvad VPN."""
+        try:
+            logger.info("    Connecting Mullvad VPN...")
+            result = subprocess.run(
+                [self.MULLVAD_CLI, "connect"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            asyncio.sleep(3)  # Give it time to connect
+            return True
+        except Exception as e:
+            logger.error(f"    VPN connect error: {e}")
+            return False
+
+    def _disconnect_vpn(self) -> bool:
+        """Disconnect Mullvad VPN."""
+        try:
+            logger.info("    Disconnecting Mullvad VPN...")
+            result = subprocess.run(
+                [self.MULLVAD_CLI, "disconnect"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return True
+        except Exception as e:
+            logger.error(f"    VPN disconnect error: {e}")
+            return False
+
     async def _reset_for_rate_limit(self) -> bool:
-        """Full reset: Flush Redis -> Stop Nitter -> Switch VPN -> Start Nitter."""
+        """Full reset: Connect VPN -> Flush Redis -> Stop Nitter -> Switch VPN -> Start Nitter."""
         self.restart_count += 1
         
         logger.warning(f"")
@@ -182,6 +213,9 @@ class NitterTimelineScraper:
             if self.client:
                 await self.client.aclose()
                 self.client = None
+            
+            # Connect VPN first (if not already connected)
+            self._connect_vpn()
             
             self._flush_redis()
             
@@ -489,6 +523,11 @@ class NitterTimelineScraper:
 
         result.total_scraped = len(result.tweets)
         result.pages_processed = page
+        
+        # Disconnect VPN if we used it (to restore server accessibility)
+        if self.restart_count > 0:
+            logger.info("    Disconnecting VPN (restoring server access)...")
+            self._disconnect_vpn()
         
         logger.info(f"")
         logger.info(f"{'='*60}")
