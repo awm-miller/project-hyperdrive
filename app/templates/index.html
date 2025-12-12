@@ -83,9 +83,10 @@
         }
 
         @keyframes jump {
-            0% { transform: rotate(var(--angle)) translateY(0) scaleY(0); opacity: 0; }
-            20% { opacity: 1; }
-            100% { transform: rotate(var(--angle)) translateY(1000px) scaleY(20); opacity: 0; }
+            0% { transform: rotate(var(--angle)) translateY(400px) scaleY(1); opacity: 0; }
+            10% { opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: rotate(var(--angle)) translateY(1200px) scaleY(15); opacity: 0; }
         }
 
         .container {
@@ -524,9 +525,9 @@
         }
 
         body.in-hyperspace .container {
-            opacity: 0.3;
-            filter: blur(2px);
-            transition: all 1s;
+            opacity: 1;
+            filter: none;
+            transition: all 0.3s;
         }
 
     </style>
