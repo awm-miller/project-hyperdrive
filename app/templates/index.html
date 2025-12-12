@@ -798,14 +798,43 @@
             };
 
             try {
-                // To simulate progress we'd need SSE/Websockets, for now we do one-shot
-                // But we can fake step updates if we split the API calls (optional optimization)
+                // Track VPN status
+                let vpnRetries = 0;
+                const maxVpnRetries = 60; // 5 minutes of retrying
                 
-                const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
+                async function makeAnalysisRequest() {
+                    try {
+                        const response = await fetch('/api/analyze', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(payload)
+                        });
+                        return response;
+                    } catch (fetchError) {
+                        // Connection failed - likely VPN rotation
+                        return null;
+                    }
+                }
+                
+                let response = await makeAnalysisRequest();
+                
+                // If connection failed, VPN might be rotating
+                while (!response && vpnRetries < maxVpnRetries) {
+                    vpnRetries++;
+                    setProgress(currentProgress, `VPN rotating... Retrying (${vpnRetries}/${maxVpnRetries})`);
+                    document.getElementById('currentStepText').style.color = '#ff6b6b';
+                    
+                    // Wait 5 seconds before retry
+                    await new Promise(r => setTimeout(r, 5000));
+                    
+                    response = await makeAnalysisRequest();
+                }
+                
+                document.getElementById('currentStepText').style.color = '';
+                
+                if (!response) {
+                    throw new Error('Server unreachable after VPN rotation. Check logs via console.');
+                }
 
                 const data = await response.json();
 
@@ -868,13 +897,30 @@
         // Status & Logs Functions
         async function refreshStatus() {
             try {
-                const resp = await fetch('/api/status');
+                const resp = await fetch('/api/status', { timeout: 5000 });
                 const data = await resp.json();
                 document.getElementById('statusApp').textContent = data.app || '--';
-                document.getElementById('statusVpn').textContent = data.vpn || '--';
+                
+                // Color-code VPN status
+                const vpnEl = document.getElementById('statusVpn');
+                const vpnStatus = data.vpn || '--';
+                vpnEl.textContent = vpnStatus;
+                if (vpnStatus.toLowerCase().includes('connected')) {
+                    vpnEl.style.color = '#74ee15'; // Green when connected
+                } else if (vpnStatus.toLowerCase().includes('disconnect')) {
+                    vpnEl.style.color = 'var(--hyper-blue)'; // Blue when disconnected
+                } else {
+                    vpnEl.style.color = '';
+                }
+                
                 document.getElementById('statusNitter').textContent = data.nitter || '--';
             } catch (e) {
-                console.error('Status fetch failed:', e);
+                // Connection lost - likely VPN rotating
+                document.getElementById('statusApp').textContent = 'UNREACHABLE';
+                document.getElementById('statusApp').style.color = '#ff6b6b';
+                document.getElementById('statusVpn').textContent = 'ROTATING...';
+                document.getElementById('statusVpn').style.color = '#ff6b6b';
+                document.getElementById('statusNitter').textContent = '--';
             }
         }
 
