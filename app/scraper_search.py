@@ -73,6 +73,7 @@ class NitterSearchScraper:
         chunk_days: int = 30,
         max_restarts: int = 50,  # Allow many restarts for large scrapes
         docker_compose_path: str = ".",
+        nitter_redis_host: Optional[str] = None,  # For Docker mode: direct Redis connection
     ):
         self.nitter_url = nitter_url or os.getenv("NITTER_URL", "http://localhost:8080")
         self.delay_seconds = delay_seconds
@@ -82,21 +83,48 @@ class NitterSearchScraper:
         self.docker_compose_path = docker_compose_path
         self.restart_count = 0
         self.client: Optional[httpx.AsyncClient] = None
+        
+        # Docker mode: when running inside a container, use direct Redis connection
+        self.nitter_redis_host = nitter_redis_host or os.getenv("NITTER_REDIS_HOST")
+        self.docker_mode = self.nitter_redis_host is not None
+        
         logger.info(f"NitterSearchScraper initialized: url={self.nitter_url}, delay={delay_seconds}s, chunk_days={chunk_days}")
+        if self.docker_mode:
+            logger.info(f"  Docker mode: Redis at {self.nitter_redis_host}")
 
     def _flush_redis(self) -> bool:
         """Flush Redis to clear rate limit cache."""
         logger.info("    Flushing Redis cache...")
-        result = subprocess.run(
-            ["docker", "exec", "nitter-redis", "redis-cli", "FLUSHALL"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        return result.returncode == 0
+        try:
+            if self.docker_mode:
+                # Docker mode: connect directly to Redis
+                result = subprocess.run(
+                    ["redis-cli", "-h", self.nitter_redis_host, "FLUSHALL"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+            else:
+                # Host mode: use docker exec
+                result = subprocess.run(
+                    ["docker", "exec", "nitter-redis", "redis-cli", "FLUSHALL"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+            return result.returncode == 0
+        except Exception as e:
+            logger.error(f"    Redis flush error: {e}")
+            return False
 
     def _stop_nitter(self) -> bool:
         """Stop Nitter container (keep Redis running)."""
+        if self.docker_mode:
+            # In Docker mode, we can't restart sibling containers
+            # Just return True - VPN rotation + Redis flush should be enough
+            logger.info("    Docker mode: skipping Nitter restart")
+            return True
+        
         logger.info("    Stopping Nitter...")
         result = subprocess.run(
             ["docker-compose", "stop", "nitter"],
@@ -109,6 +137,10 @@ class NitterSearchScraper:
 
     def _start_nitter(self) -> bool:
         """Start Nitter container."""
+        if self.docker_mode:
+            # In Docker mode, Nitter stays running
+            return True
+        
         logger.info("    Starting Nitter...")
         result = subprocess.run(
             ["docker-compose", "start", "nitter"],
