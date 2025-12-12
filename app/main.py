@@ -23,8 +23,12 @@ from pydantic import BaseModel, Field
 from .scraper_search import NitterSearchScraper
 from .scraper_timeline import NitterTimelineScraper
 from .analyzer import GeminiAnalyzer
+from .jobs import JobQueue, Job, JobStatus
 
 load_dotenv()
+
+# Redis URL for job queue
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 # Configure logging
 logging.basicConfig(
@@ -39,15 +43,30 @@ NITTER_URL = os.getenv("NITTER_URL", "http://localhost:8080")
 DOCKER_COMPOSE_PATH = os.getenv("DOCKER_COMPOSE_PATH", ".")
 
 
+# Global job queue instance
+job_queue: Optional[JobQueue] = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    global job_queue
     logger.info("=" * 60)
     logger.info("NITTER TWEET ANALYZER - STARTING UP")
     logger.info("=" * 60)
     logger.info(f"Nitter URL: {NITTER_URL}")
     logger.info(f"Docker Compose Path: {DOCKER_COMPOSE_PATH}")
+    logger.info(f"Redis URL: {REDIS_URL}")
     logger.info(f"Gemini API key configured: {bool(os.getenv('GEMINI_API_KEY'))}")
+    
+    # Initialize job queue
+    try:
+        job_queue = JobQueue(REDIS_URL)
+        logger.info("Job queue connected to Redis")
+    except Exception as e:
+        logger.warning(f"Could not connect to Redis: {e}")
+        logger.warning("Job queue features will be disabled")
+    
     logger.info("=" * 60)
     yield
     logger.info("Shutting down...")
@@ -145,6 +164,50 @@ class HealthResponse(BaseModel):
     gemini_configured: bool
 
 
+# Job-related models
+class JobSubmitRequest(BaseModel):
+    """Request to submit a new analysis job."""
+    username: str = Field(..., description="Twitter username (without @)")
+    start_date: Optional[str] = Field(default=None, description="Start date YYYY-MM-DD")
+    end_date: Optional[str] = Field(default=None, description="End date YYYY-MM-DD")
+    include_tweets: bool = Field(default=True)
+    include_retweets: bool = Field(default=True)
+    include_replies: bool = Field(default=True)
+    custom_prompt: Optional[str] = Field(default=None)
+
+
+class JobSubmitResponse(BaseModel):
+    """Response when submitting a job."""
+    job_id: str
+    status: str
+    message: str
+
+
+class JobStatusResponse(BaseModel):
+    """Full job status and results."""
+    job_id: str
+    username: str
+    status: str
+    progress: int
+    current_step: str
+    tweets_scraped: int
+    retweets_scraped: int
+    analysis: str = ""
+    themes: list[str] = []
+    highlighted_tweets: list[HighlightedTweet] = []
+    error: Optional[str] = None
+    created_at: str
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    worker_id: Optional[str] = None
+
+
+class JobListResponse(BaseModel):
+    """List of jobs."""
+    jobs: list[JobStatusResponse]
+    queue_length: int
+
+
 # Endpoints
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -165,6 +228,126 @@ async def health_check():
         nitter_url=NITTER_URL,
         gemini_configured=bool(gemini_key and len(gemini_key) > 10),
     )
+
+
+# ==================== JOB QUEUE ENDPOINTS ====================
+
+@app.post("/api/jobs", response_model=JobSubmitResponse)
+async def submit_job(request: JobSubmitRequest):
+    """
+    Submit a new analysis job to the queue.
+    Returns immediately with job ID - workers process in background.
+    """
+    if not job_queue:
+        raise HTTPException(status_code=503, detail="Job queue not available (Redis not connected)")
+    
+    username = request.username.lstrip("@").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+    
+    job = job_queue.create_job(
+        username=username,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        include_tweets=request.include_tweets,
+        include_retweets=request.include_retweets,
+        include_replies=request.include_replies,
+        custom_prompt=request.custom_prompt,
+    )
+    
+    logger.info(f"Job {job.id} submitted for @{username}")
+    
+    return JobSubmitResponse(
+        job_id=job.id,
+        status=job.status.value,
+        message=f"Job queued. Position: {job_queue.get_queue_length()}",
+    )
+
+
+@app.get("/api/jobs/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str):
+    """Get status and results of a specific job."""
+    if not job_queue:
+        raise HTTPException(status_code=503, detail="Job queue not available")
+    
+    job = job_queue.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Convert highlighted tweets to response format
+    highlighted = [
+        HighlightedTweet(
+            text=ht.get("text", ""),
+            reason=ht.get("reason", ""),
+            url=ht.get("url", ""),
+            images=ht.get("images", []),
+        )
+        for ht in job.highlighted_tweets
+    ]
+    
+    return JobStatusResponse(
+        job_id=job.id,
+        username=job.username,
+        status=job.status.value,
+        progress=job.progress,
+        current_step=job.current_step,
+        tweets_scraped=job.tweets_scraped,
+        retweets_scraped=job.retweets_scraped,
+        analysis=job.analysis,
+        themes=job.themes,
+        highlighted_tweets=highlighted,
+        error=job.error,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        worker_id=job.worker_id,
+    )
+
+
+@app.get("/api/jobs", response_model=JobListResponse)
+async def list_jobs(limit: int = 20):
+    """List recent jobs."""
+    if not job_queue:
+        raise HTTPException(status_code=503, detail="Job queue not available")
+    
+    jobs = job_queue.list_jobs(limit=limit)
+    
+    job_responses = []
+    for job in jobs:
+        highlighted = [
+            HighlightedTweet(
+                text=ht.get("text", ""),
+                reason=ht.get("reason", ""),
+                url=ht.get("url", ""),
+                images=ht.get("images", []),
+            )
+            for ht in job.highlighted_tweets
+        ]
+        job_responses.append(JobStatusResponse(
+            job_id=job.id,
+            username=job.username,
+            status=job.status.value,
+            progress=job.progress,
+            current_step=job.current_step,
+            tweets_scraped=job.tweets_scraped,
+            retweets_scraped=job.retweets_scraped,
+            analysis=job.analysis,
+            themes=job.themes,
+            highlighted_tweets=highlighted,
+            error=job.error,
+            created_at=job.created_at,
+            started_at=job.started_at,
+            completed_at=job.completed_at,
+            worker_id=job.worker_id,
+        ))
+    
+    return JobListResponse(
+        jobs=job_responses,
+        queue_length=job_queue.get_queue_length(),
+    )
+
+
+# ==================== LEGACY DIRECT ENDPOINTS ====================
 
 
 @app.get("/api/logs")

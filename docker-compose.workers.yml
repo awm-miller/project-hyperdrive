@@ -1,0 +1,86 @@
+version: "3.9"
+
+# Worker system with job queue
+# Run with: docker-compose -f docker-compose.workers.yml up -d
+
+services:
+  # ==================== SHARED SERVICES ====================
+  
+  # Job queue Redis (separate from Nitter's cache)
+  redis-queue:
+    image: redis:7-alpine
+    container_name: redis-queue
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-queue-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: redis-cli ping
+      interval: 30s
+      timeout: 5s
+      retries: 2
+
+  # ==================== WORKER 1 ====================
+  
+  # Worker 1's Nitter cache
+  nitter-redis-1:
+    image: redis:7-alpine
+    container_name: nitter-redis-1
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - nitter-redis-1-data:/data
+    restart: unless-stopped
+  
+  # Worker 1's Nitter instance (port 8081)
+  nitter-1:
+    image: zedeus/nitter:latest
+    container_name: nitter-1
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./nitter-worker1.conf:/src/nitter.conf:ro
+      - ./sessions.jsonl:/src/sessions.jsonl:ro
+    depends_on:
+      - nitter-redis-1
+    restart: unless-stopped
+    healthcheck:
+      test: wget -nv --tries=1 --spider http://127.0.0.1:8080/Jack/status/20 || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 2
+
+  # ==================== WORKER 2 ====================
+  
+  # Worker 2's Nitter cache
+  nitter-redis-2:
+    image: redis:7-alpine
+    container_name: nitter-redis-2
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - nitter-redis-2-data:/data
+    restart: unless-stopped
+  
+  # Worker 2's Nitter instance (port 8082)
+  nitter-2:
+    image: zedeus/nitter:latest
+    container_name: nitter-2
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./nitter-worker2.conf:/src/nitter.conf:ro
+      - ./sessions.jsonl:/src/sessions.jsonl:ro
+    depends_on:
+      - nitter-redis-2
+    restart: unless-stopped
+    healthcheck:
+      test: wget -nv --tries=1 --spider http://127.0.0.1:8080/Jack/status/20 || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 2
+
+volumes:
+  redis-queue-data:
+  nitter-redis-1-data:
+  nitter-redis-2-data:

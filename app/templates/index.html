@@ -454,7 +454,7 @@
 
         .status-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 1rem;
         }
 
@@ -645,6 +645,10 @@
                     <span class="status-label">Nitter</span>
                     <span class="status-value" id="statusNitter">--</span>
                 </div>
+                <div class="status-item">
+                    <span class="status-label">Queue</span>
+                    <span class="status-value" id="statusQueue">--</span>
+                </div>
             </div>
             <div id="logsContainer" style="display:none; margin-top:1rem;">
                 <pre id="logsContent" style="background:#111; padding:1rem; max-height:300px; overflow-y:auto; font-size:0.75rem; color:#0f0; border:1px solid var(--border-dim);"></pre>
@@ -769,6 +773,99 @@
             return clean.split('\n\n').map(p => `<p style="margin-bottom:1rem;">${p}</p>`).join('');
         }
 
+        // Job Queue Mode toggle
+        let useJobQueue = true;  // Set to true to use job queue, false for direct mode
+        let currentJobId = null;
+        let pollInterval = null;
+
+        async function pollJobStatus(jobId) {
+            try {
+                const resp = await fetch(`/api/jobs/${jobId}`);
+                if (!resp.ok) {
+                    throw new Error('Job not found');
+                }
+                const job = await resp.json();
+                
+                // Update progress from server
+                setProgress(job.progress, job.current_step);
+                
+                // Update step indicators
+                if (job.current_step.toLowerCase().includes('retweet')) {
+                    updateStep('step1', 'active', `${job.retweets_scraped} found`);
+                } else if (job.current_step.toLowerCase().includes('tweet')) {
+                    updateStep('step1', 'complete', `${job.retweets_scraped} retweets`);
+                    updateStep('step2', 'active', `${job.tweets_scraped} found`);
+                } else if (job.current_step.toLowerCase().includes('gemini') || job.current_step.toLowerCase().includes('analy')) {
+                    updateStep('step1', 'complete', `${job.retweets_scraped} retweets`);
+                    updateStep('step2', 'complete', `${job.tweets_scraped} tweets`);
+                    updateStep('step3', 'active', 'Processing...');
+                }
+                
+                // Check if complete
+                if (job.status === 'completed') {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    handleJobComplete(job);
+                } else if (job.status === 'failed') {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    handleJobFailed(job);
+                }
+                
+            } catch (err) {
+                // Connection failed - might be VPN rotation, keep polling
+                console.log('Poll failed, retrying...', err);
+            }
+        }
+
+        function handleJobComplete(job) {
+            toggleHyperspace(false);
+            stopProgressSimulation(true);
+            submitBtn.textContent = "Analyze";
+            submitBtn.disabled = false;
+            
+            updateStep('step1', 'complete', `${job.retweets_scraped} retweets`);
+            updateStep('step2', 'complete', `${job.tweets_scraped} tweets`);
+            updateStep('step3', 'complete', 'Complete');
+            
+            // Render Results
+            let analysisText = job.analysis;
+            if (analysisText.includes('## KEY THEMES')) {
+                analysisText = analysisText.split('## KEY THEMES')[0];
+            }
+            document.getElementById('juicerContent').innerHTML = formatAnalysis(analysisText);
+
+            const themesHtml = (job.themes || []).map(t => 
+                `<div class="theme-pill">${t}</div>`
+            ).join('');
+            document.getElementById('themesGrid').innerHTML = themesHtml;
+
+            const highlightsHtml = (job.highlighted_tweets || []).map(t => `
+                <div class="highlight-card">
+                    <div class="tweet-text">"${t.text}"</div>
+                    <div class="tweet-meta">
+                        ${t.url ? `<a href="${t.url}" target="_blank" class="link-btn">View Tweet</a>` : ''}
+                    </div>
+                    ${t.images && t.images.length ? `
+                        <div class="tweet-images">
+                            ${t.images.map(src => `<img src="${src}" class="tweet-img" onerror="this.style.display='none'">`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            document.getElementById('highlightsGrid').innerHTML = highlightsHtml;
+
+            resultsPanel.classList.add('visible');
+        }
+
+        function handleJobFailed(job) {
+            toggleHyperspace(false);
+            stopProgressSimulation(false);
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Error - Retry";
+            alert('Job failed: ' + (job.error || 'Unknown error'));
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -784,7 +881,7 @@
             toggleHyperspace(true);
             startProgressSimulation();
 
-            updateStep('step1', 'active', 'Working...');
+            updateStep('step1', 'active', 'Queued');
             updateStep('step2', '', 'Pending');
             updateStep('step3', '', 'Pending');
 
@@ -799,98 +896,113 @@
             };
 
             try {
-                // Track VPN status
-                let vpnRetries = 0;
-                const maxVpnRetries = 60; // 5 minutes of retrying
-                
-                async function makeAnalysisRequest() {
-                    try {
-                        const response = await fetch('/api/analyze', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify(payload)
-                        });
-                        return response;
-                    } catch (fetchError) {
-                        // Connection failed - likely VPN rotation
-                        return null;
+                if (useJobQueue) {
+                    // ===== JOB QUEUE MODE =====
+                    // Submit job to queue
+                    const submitResp = await fetch('/api/jobs', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!submitResp.ok) {
+                        const err = await submitResp.json();
+                        throw new Error(err.detail || 'Failed to submit job');
                     }
-                }
-                
-                let response = await makeAnalysisRequest();
-                
-                // If connection failed, VPN might be rotating
-                while (!response && vpnRetries < maxVpnRetries) {
-                    vpnRetries++;
-                    setProgress(currentProgress, `VPN rotating... Retrying (${vpnRetries}/${maxVpnRetries})`);
-                    document.getElementById('currentStepText').style.color = '#ff6b6b';
                     
-                    // Wait 5 seconds before retry
-                    await new Promise(r => setTimeout(r, 5000));
+                    const submitData = await submitResp.json();
+                    currentJobId = submitData.job_id;
                     
-                    response = await makeAnalysisRequest();
-                }
-                
-                document.getElementById('currentStepText').style.color = '';
-                
-                if (!response) {
-                    throw new Error('Server unreachable after VPN rotation. Check logs via console.');
-                }
+                    setProgress(5, `Job queued (ID: ${currentJobId})`);
+                    
+                    // Start polling for status
+                    pollInterval = setInterval(() => pollJobStatus(currentJobId), 2000);
+                    
+                } else {
+                    // ===== DIRECT MODE (legacy) =====
+                    let vpnRetries = 0;
+                    const maxVpnRetries = 60;
+                    
+                    async function makeAnalysisRequest() {
+                        try {
+                            const response = await fetch('/api/analyze', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify(payload)
+                            });
+                            return response;
+                        } catch (fetchError) {
+                            return null;
+                        }
+                    }
+                    
+                    let response = await makeAnalysisRequest();
+                    
+                    while (!response && vpnRetries < maxVpnRetries) {
+                        vpnRetries++;
+                        setProgress(currentProgress, `VPN rotating... Retrying (${vpnRetries}/${maxVpnRetries})`);
+                        document.getElementById('currentStepText').style.color = '#ff6b6b';
+                        await new Promise(r => setTimeout(r, 5000));
+                        response = await makeAnalysisRequest();
+                    }
+                    
+                    document.getElementById('currentStepText').style.color = '';
+                    
+                    if (!response) {
+                        throw new Error('Server unreachable after VPN rotation.');
+                    }
 
-                const data = await response.json();
+                    const data = await response.json();
 
-                // Sequence Complete
-                toggleHyperspace(false);
-                stopProgressSimulation(response.ok);
-                submitBtn.textContent = "Analyze";
-                submitBtn.disabled = false;
+                    toggleHyperspace(false);
+                    stopProgressSimulation(response.ok);
+                    submitBtn.textContent = "Analyze";
+                    submitBtn.disabled = false;
 
-                if (!response.ok) throw new Error(data.detail || 'Analysis Failed');
+                    if (!response.ok) throw new Error(data.detail || 'Analysis Failed');
 
-                // Update Status
-                updateStep('step1', 'complete', `${data.retweets_scraped} retweets`);
-                updateStep('step2', 'complete', `${data.tweets_scraped} tweets`);
-                updateStep('step3', 'complete', 'Complete');
+                    updateStep('step1', 'complete', `${data.retweets_scraped} retweets`);
+                    updateStep('step2', 'complete', `${data.tweets_scraped} tweets`);
+                    updateStep('step3', 'complete', 'Complete');
 
-                // Render Results
-                
-                // 1. Juicer
-                // Extract just the first paragraph/section before "KEY THEMES"
-                let analysisText = data.analysis;
-                if (analysisText.includes('## KEY THEMES')) {
-                    analysisText = analysisText.split('## KEY THEMES')[0];
-                }
-                document.getElementById('juicerContent').innerHTML = formatAnalysis(analysisText);
+                    let analysisText = data.analysis;
+                    if (analysisText.includes('## KEY THEMES')) {
+                        analysisText = analysisText.split('## KEY THEMES')[0];
+                    }
+                    document.getElementById('juicerContent').innerHTML = formatAnalysis(analysisText);
 
-                // 2. Themes
-                const themesHtml = (data.themes || []).map(t => 
-                    `<div class="theme-pill">${t}</div>`
-                ).join('');
-                document.getElementById('themesGrid').innerHTML = themesHtml;
+                    const themesHtml = (data.themes || []).map(t => 
+                        `<div class="theme-pill">${t}</div>`
+                    ).join('');
+                    document.getElementById('themesGrid').innerHTML = themesHtml;
 
-                // 3. Highlights
-                const highlightsHtml = (data.highlighted_tweets || []).map(t => `
-                    <div class="highlight-card">
-                        <div class="tweet-text">"${t.text}"</div>
-                        <div class="tweet-meta">
-                            ${t.url ? `<a href="${t.url}" target="_blank" class="link-btn">View Tweet</a>` : ''}
-                        </div>
-                        ${t.images && t.images.length ? `
-                            <div class="tweet-images">
-                                ${t.images.map(src => `<img src="${src}" class="tweet-img" onerror="this.style.display='none'">`).join('')}
+                    const highlightsHtml = (data.highlighted_tweets || []).map(t => `
+                        <div class="highlight-card">
+                            <div class="tweet-text">"${t.text}"</div>
+                            <div class="tweet-meta">
+                                ${t.url ? `<a href="${t.url}" target="_blank" class="link-btn">View Tweet</a>` : ''}
                             </div>
-                        ` : ''}
-                    </div>
-                `).join('');
-                document.getElementById('highlightsGrid').innerHTML = highlightsHtml;
+                            ${t.images && t.images.length ? `
+                                <div class="tweet-images">
+                                    ${t.images.map(src => `<img src="${src}" class="tweet-img" onerror="this.style.display='none'">`).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                    document.getElementById('highlightsGrid').innerHTML = highlightsHtml;
 
-                resultsPanel.classList.add('visible');
+                    resultsPanel.classList.add('visible');
+                }
 
             } catch (err) {
                 toggleHyperspace(false);
                 stopProgressSimulation(false);
                 submitBtn.disabled = false;
                 submitBtn.textContent = "Error - Retry";
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
                 alert(err.message);
             }
         });
@@ -901,6 +1013,7 @@
                 const resp = await fetch('/api/status', { timeout: 5000 });
                 const data = await resp.json();
                 document.getElementById('statusApp').textContent = data.app || '--';
+                document.getElementById('statusApp').style.color = '';
                 
                 // Color-code VPN status
                 const vpnEl = document.getElementById('statusVpn');
@@ -915,6 +1028,15 @@
                 }
                 
                 document.getElementById('statusNitter').textContent = data.nitter || '--';
+                
+                // Get queue length
+                try {
+                    const queueResp = await fetch('/api/jobs?limit=1');
+                    const queueData = await queueResp.json();
+                    document.getElementById('statusQueue').textContent = queueData.queue_length + ' pending';
+                } catch (qe) {
+                    document.getElementById('statusQueue').textContent = 'unavailable';
+                }
             } catch (e) {
                 // Connection lost - likely VPN rotating
                 document.getElementById('statusApp').textContent = 'UNREACHABLE';
@@ -922,6 +1044,7 @@
                 document.getElementById('statusVpn').textContent = 'ROTATING...';
                 document.getElementById('statusVpn').style.color = '#ff6b6b';
                 document.getElementById('statusNitter').textContent = '--';
+                document.getElementById('statusQueue').textContent = '--';
             }
         }
 
