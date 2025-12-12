@@ -14,6 +14,7 @@ import asyncio
 import argparse
 import logging
 import os
+import subprocess
 import sys
 from datetime import datetime
 
@@ -28,6 +29,9 @@ from app.scraper_search import NitterSearchScraper
 from app.analyzer import GeminiAnalyzer
 
 load_dotenv()
+
+# Mullvad CLI path
+MULLVAD_CLI = "/usr/bin/mullvad"
 
 # Configure logging
 logging.basicConfig(
@@ -60,6 +64,36 @@ class Worker:
         logger.info(f"Worker {worker_id} initialized")
         logger.info(f"  Nitter URL: {nitter_url}")
         logger.info(f"  Redis URL: {redis_url}")
+    
+    def _disconnect_vpn(self) -> bool:
+        """Disconnect Mullvad VPN to allow Gemini API calls."""
+        try:
+            logger.info("Disconnecting VPN for Gemini call...")
+            result = subprocess.run(
+                [MULLVAD_CLI, "disconnect"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            return result.returncode == 0
+        except Exception as e:
+            logger.warning(f"VPN disconnect error: {e}")
+            return False
+    
+    def _reconnect_vpn(self) -> bool:
+        """Reconnect Mullvad VPN after Gemini call."""
+        try:
+            logger.info("Reconnecting VPN...")
+            result = subprocess.run(
+                [MULLVAD_CLI, "connect"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            return result.returncode == 0
+        except Exception as e:
+            logger.warning(f"VPN reconnect error: {e}")
+            return False
     
     async def process_job(self, job: Job) -> None:
         """Process a single job."""
@@ -161,14 +195,21 @@ class Worker:
             
             logger.info(f"Compiled {len(all_tweets)} tweets into {len(compiled):,} characters")
             
-            # Run Gemini analysis
-            analyzer = GeminiAnalyzer(api_key=self.gemini_key)
-            analysis_result = analyzer.analyze(
-                compiled_tweets=compiled,
-                username=job.username,
-                tweet_count=len(all_tweets),
-                custom_prompt=job.custom_prompt,
-            )
+            # Disconnect VPN before Gemini call (VPN may block Google API)
+            self._disconnect_vpn()
+            
+            try:
+                # Run Gemini analysis
+                analyzer = GeminiAnalyzer(api_key=self.gemini_key)
+                analysis_result = analyzer.analyze(
+                    compiled_tweets=compiled,
+                    username=job.username,
+                    tweet_count=len(all_tweets),
+                    custom_prompt=job.custom_prompt,
+                )
+            finally:
+                # Always reconnect VPN after Gemini call
+                self._reconnect_vpn()
             
             self.queue.update_progress(job, 90, "Finalizing...")
             
