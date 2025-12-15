@@ -971,7 +971,10 @@ DASHBOARD_HTML = """
             if (!workerId) return;
             try {
                 const data = await api(`/api/workers/${workerId}/logs?lines=100`);
-                document.getElementById('logsContent').textContent = data.logs || 'No logs available';
+                const logsEl = document.getElementById('logsContent');
+                logsEl.textContent = data.logs || 'No logs available';
+                // Auto-scroll to bottom
+                logsEl.scrollTop = logsEl.scrollHeight;
             } catch (e) {
                 document.getElementById('logsContent').textContent = 'Error loading logs: ' + e.message;
             }
@@ -1060,6 +1063,14 @@ DASHBOARD_HTML = """
         setInterval(refreshJobs, 10000);
         setInterval(refreshSystem, 60000);
         setInterval(refreshStats, 30000);
+        
+        // Auto-refresh logs every 3 seconds if a worker is selected
+        setInterval(() => {
+            const workerId = document.getElementById('logWorkerSelect').value;
+            if (workerId) {
+                refreshLogs();
+            }
+        }, 3000);
     </script>
 </body>
 </html>
