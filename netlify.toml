@@ -6,7 +6,7 @@
 # Proxy API calls to VPS backend
 [[redirects]]
   from = "/api/*"
-  to = "https://your-vps-domain.com/api/:splat"
+  to = "http://161.35.160.229:3000/api/:splat"
   status = 200
   force = true
 

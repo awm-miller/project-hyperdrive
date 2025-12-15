@@ -16,6 +16,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -77,6 +78,15 @@ app = FastAPI(
     description="Scrape tweets via Nitter and analyze them with Gemini",
     version="2.0.0",
     lifespan=lifespan,
+)
+
+# CORS - allow Netlify and local development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (Netlify URLs are dynamic)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Setup templates
