@@ -1,0 +1,18 @@
+# Netlify configuration for Hyperdrive frontend
+
+[build]
+  publish = "frontend"
+
+# Proxy API calls to VPS backend
+[[redirects]]
+  from = "/api/*"
+  to = "https://your-vps-domain.com/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+

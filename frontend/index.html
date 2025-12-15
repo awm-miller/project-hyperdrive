@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HYPERDRIVE | Tweet Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --space-black: #000000;
+            --star-white: #ffffff;
+            --hyper-blue: #4deeea;
+            --hyper-green: #74ee15;
+            --panel-bg: rgba(10, 10, 15, 0.9);
+            --border-dim: rgba(255, 255, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: var(--space-black);
+            color: var(--star-white);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Starfield */
+        .stars {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .star {
+            position: absolute;
+            background: var(--star-white);
+            border-radius: 50%;
+            opacity: 0;
+            animation: star-flicker var(--duration) ease-in-out infinite;
+        }
+        @keyframes star-flicker {
+            0% { opacity: 0.2; }
+            50% { opacity: 0.8; }
+            100% { opacity: 0.2; }
+        }
+
+        /* Layout */
+        .main-content {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+            padding-bottom: 200px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-top: 2rem;
+        }
+        .logo {
+            font-family: 'Space Mono', monospace;
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(180deg, #fff 0%, #4deeea 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--hyper-blue);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-dim);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .form-group { margin-bottom: 1rem; }
+        label {
+            display: block;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--hyper-blue);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+        }
+        input[type="text"], input[type="date"], textarea {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-dim);
+            color: var(--star-white);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.1rem;
+            padding: 0.75rem 1rem;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--hyper-blue);
+        }
+        textarea { resize: vertical; min-height: 60px; }
+
+        .checkbox-row {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #aaa;
+            cursor: pointer;
+        }
+        .checkbox-item input {
+            appearance: none;
+            width: 14px; height: 14px;
+            border: 1px solid var(--hyper-blue);
+            cursor: pointer;
+        }
+        .checkbox-item input:checked {
+            background: var(--hyper-blue);
+        }
+
+        .submit-btn {
+            background: transparent;
+            border: 1px solid var(--hyper-blue);
+            color: var(--hyper-blue);
+            font-family: 'Space Mono', monospace;
+            font-size: 1rem;
+            padding: 1rem 2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .submit-btn:hover {
+            background: var(--hyper-blue);
+            color: #000;
+        }
+
+        /* Results */
+        .results-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-dim);
+            padding: 2rem;
+            display: none;
+        }
+        .results-panel.visible { display: block; }
+        .results-header {
+            font-family: 'Space Mono', monospace;
+            color: var(--hyper-blue);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .juicer-text {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border-left: 3px solid var(--hyper-blue);
+            background: rgba(77, 238, 234, 0.05);
+        }
+        #highlightsGrid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+        }
+        .highlight-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-dim);
+            padding: 1rem;
+        }
+        .highlight-card:hover {
+            border-color: var(--hyper-blue);
+            background: rgba(77, 238, 234, 0.05);
+        }
+        .tweet-text {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            font-style: italic;
+        }
+        .tweet-meta {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+        }
+        .tweet-meta a {
+            color: var(--hyper-blue);
+            text-decoration: none;
+        }
+        .tweet-images {
+            display: flex;
+            gap: 8px;
+            margin-top: 0.75rem;
+            overflow-x: auto;
+        }
+        .tweet-img {
+            height: 120px;
+            border: 1px solid var(--border-dim);
+        }
+
+        /* Job Dashboard - Fixed Bottom Right */
+        .job-dashboard {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 320px;
+            max-height: 400px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-dim);
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        .dashboard-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-dim);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--hyper-blue);
+        }
+        .dashboard-stats {
+            display: flex;
+            gap: 1rem;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.2rem;
+            color: var(--star-white);
+        }
+        .stat-label {
+            font-size: 0.6rem;
+            color: #666;
+            text-transform: uppercase;
+        }
+        .jobs-list {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+        .job-item {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-dim);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .job-item:hover {
+            background: rgba(77, 238, 234, 0.05);
+        }
+        .job-item.active {
+            background: rgba(77, 238, 234, 0.1);
+            border-left: 2px solid var(--hyper-blue);
+        }
+        .job-username {
+            color: var(--star-white);
+            font-size: 0.85rem;
+        }
+        .job-status {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.25rem;
+        }
+        .job-status-text {
+            color: #888;
+        }
+        .job-status-text.pending { color: #888; }
+        .job-status-text.running { color: var(--hyper-blue); }
+        .job-status-text.completed { color: var(--hyper-green); }
+        .job-status-text.failed { color: #ff6b6b; }
+        .job-progress {
+            width: 60px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            margin-top: 0.5rem;
+        }
+        .job-progress-fill {
+            height: 100%;
+            background: var(--hyper-blue);
+            transition: width 0.3s;
+        }
+        .no-jobs {
+            padding: 2rem 1rem;
+            text-align: center;
+            color: #666;
+        }
+
+        /* Job Dashboard Collapse */
+        .dashboard-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        .dashboard-header:hover {
+            background: rgba(77, 238, 234, 0.05);
+        }
+        .job-dashboard.collapsed .jobs-list {
+            display: none;
+        }
+        .job-dashboard.collapsed {
+            max-height: auto;
+        }
+        .collapse-icon {
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        .job-dashboard.collapsed .collapse-icon {
+            transform: rotate(180deg);
+        }
+    </style>
+</head>
+<body>
+    <div class="stars" id="starfield"></div>
+
+    <div class="main-content">
+        <header>
+            <div class="logo">HYPERDRIVE</div>
+            <div class="subtitle">Twitter Profile Analyzer</div>
+        </header>
+
+        <div class="control-panel">
+            <form id="analyzeForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="username" placeholder="@username" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date" id="startDate">
+                    </div>
+                    <div class="form-group">
+                        <label>End Date</label>
+                        <input type="date" id="endDate">
+                    </div>
+                </div>
+
+                <div class="checkbox-row">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="includeTweets" checked>
+                        <span>Tweets</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="includeRetweets" checked>
+                        <span>Retweets</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="includeReplies" checked>
+                        <span>Replies</span>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Custom Prompt (Optional)</label>
+                    <textarea id="customPrompt" placeholder="Leave empty for default analysis"></textarea>
+                </div>
+
+                <button type="submit" class="submit-btn">Analyze</button>
+            </form>
+        </div>
+
+        <div class="results-panel" id="resultsPanel">
+            <div class="results-header">
+                <h2 id="resultsTitle">Analysis Results</h2>
+                <span id="resultsStats"></span>
+            </div>
+            <div class="juicer-text" id="juicerContent"></div>
+            <label>Controversial Tweets</label>
+            <div id="highlightsGrid"></div>
+        </div>
+    </div>
+
+    <!-- Job Dashboard - Bottom Right -->
+    <div class="job-dashboard" id="jobDashboard">
+        <div class="dashboard-header" onclick="toggleDashboard()">
+            <span><span class="collapse-icon">▼</span> JOBS</span>
+        </div>
+        <div class="jobs-list" id="jobsList">
+            <div class="no-jobs">No jobs submitted yet</div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize starfield
+        const starfield = document.getElementById('starfield');
+        for(let i=0; i<80; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            const size = Math.random() * 2 + 1;
+            star.style.width = size + 'px';
+            star.style.height = size + 'px';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.setProperty('--duration', (Math.random() * 3 + 2) + 's');
+            starfield.appendChild(star);
+        }
+
+        // Set default dates
+        const today = new Date();
+        const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+        document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        document.getElementById('startDate').value = lastYear.toISOString().split('T')[0];
+
+        // Job tracking
+        let myJobs = [];  // Jobs submitted by this client
+        let selectedJobId = null;
+
+        // Submit job
+        document.getElementById('analyzeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim().replace('@', '');
+            if (!username) return;
+
+            const payload = {
+                username: username,
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value,
+                include_tweets: document.getElementById('includeTweets').checked,
+                include_retweets: document.getElementById('includeRetweets').checked,
+                include_replies: document.getElementById('includeReplies').checked,
+                custom_prompt: document.getElementById('customPrompt').value
+            };
+
+            try {
+                const resp = await fetch('/api/jobs', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Failed to submit job');
+                }
+                
+                const data = await resp.json();
+                
+                // Add to tracked jobs
+                myJobs.unshift({
+                    id: data.job_id,
+                    username: username,
+                    status: 'pending',
+                    progress: 0,
+                    current_step: 'Queued'
+                });
+                
+                // Select this job
+                selectedJobId = data.job_id;
+                
+                // Clear form
+                document.getElementById('username').value = '';
+                
+                // Update UI
+                renderJobsList();
+                
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        });
+
+        // Render jobs list
+        function renderJobsList() {
+            const container = document.getElementById('jobsList');
+            
+            if (myJobs.length === 0) {
+                container.innerHTML = '<div class="no-jobs">No jobs submitted yet</div>';
+                return;
+            }
+            
+            container.innerHTML = myJobs.map((job, index) => {
+                let statusInfo = job.current_step;
+                if (job.status === 'pending') {
+                    const queuePos = myJobs.filter((j, i) => i < index && j.status === 'pending').length + 1;
+                    statusInfo = `Queued #${queuePos}`;
+                } else if (job.status === 'running' && job.worker_id) {
+                    statusInfo = `${job.current_step} (${job.worker_id})`;
+                }
+                return `
+                <div class="job-item ${job.id === selectedJobId ? 'active' : ''}" onclick="selectJob('${job.id}')">
+                    <div class="job-username">@${job.username}</div>
+                    <div class="job-status">
+                        <span class="job-status-text ${job.status}">${statusInfo}</span>
+                        <span>${job.progress}%</span>
+                    </div>
+                    <div class="job-progress">
+                        <div class="job-progress-fill" style="width: ${job.progress}%"></div>
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        // Select a job to view results
+        function selectJob(jobId) {
+            selectedJobId = jobId;
+            renderJobsList();
+            
+            const job = myJobs.find(j => j.id === jobId);
+            if (job && job.status === 'completed' && job.results) {
+                showResults(job);
+            }
+        }
+
+        // Show results for a job
+        function showResults(job) {
+            const panel = document.getElementById('resultsPanel');
+            document.getElementById('resultsTitle').textContent = `@${job.username}`;
+            document.getElementById('resultsStats').textContent = `${job.tweets_scraped || 0} tweets, ${job.retweets_scraped || 0} retweets`;
+            
+            // Analysis text - extract summary section
+            let analysisText = job.results.analysis || '';
+            // Remove section headers and extract just the content
+            analysisText = analysisText.replace(/## ANALYSIS SUMMARY/gi, '').replace(/## TOP 3/gi, '').trim();
+            // Take only the summary part (before controversial tweets section)
+            if (analysisText.includes('1. "')) {
+                analysisText = analysisText.split('1. "')[0].trim();
+            }
+            document.getElementById('juicerContent').innerHTML = analysisText.split('\n\n').filter(p => p.trim()).map(p => `<p style="margin-bottom:0.75rem;">${p}</p>`).join('');
+            
+            // Highlighted tweets
+            const highlights = job.results.highlighted_tweets || [];
+            document.getElementById('highlightsGrid').innerHTML = highlights.map(t => `
+                <div class="highlight-card">
+                    <div class="tweet-text">"${t.text}"</div>
+                    <div class="tweet-meta">
+                        ${t.url ? `<a href="${t.url}" target="_blank">View Tweet</a>` : '<span style="color:#666">No URL</span>'}
+                    </div>
+                    ${t.images && t.images.length ? `
+                        <div class="tweet-images">
+                            ${t.images.map(src => `<img src="${src}" class="tweet-img" onerror="this.style.display='none'">`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            panel.classList.add('visible');
+        }
+
+        // Poll for job updates
+        async function pollJobs() {
+            // Update each tracked job
+            for (let i = 0; i < myJobs.length; i++) {
+                const job = myJobs[i];
+                if (job.status === 'completed' || job.status === 'failed') continue;
+                
+                try {
+                    const resp = await fetch(`/api/jobs/${job.id}`);
+                    if (!resp.ok) continue;
+                    
+                    const data = await resp.json();
+                    job.status = data.status;
+                    job.progress = data.progress;
+                    job.current_step = data.current_step;
+                    job.tweets_scraped = data.tweets_scraped;
+                    job.retweets_scraped = data.retweets_scraped;
+                    job.worker_id = data.worker_id;
+                    
+                    if (data.status === 'completed') {
+                        job.results = {
+                            analysis: data.analysis,
+                            themes: data.themes,
+                            highlighted_tweets: data.highlighted_tweets
+                        };
+                        
+                        // Auto-show results if this is the selected job
+                        if (job.id === selectedJobId) {
+                            showResults(job);
+                        }
+                    }
+                } catch (e) {}
+            }
+            
+            renderJobsList();
+        }
+
+        // Initial render and start polling
+        renderJobsList();
+        setInterval(pollJobs, 10000);  // Poll jobs every 10 seconds
+
+        // Dashboard collapse toggle
+        function toggleDashboard() {
+            const dashboard = document.getElementById('jobDashboard');
+            dashboard.classList.toggle('collapsed');
+        }
+    </script>
+</body>
+</html>
