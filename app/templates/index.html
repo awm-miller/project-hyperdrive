@@ -177,27 +177,16 @@
             border-left: 3px solid var(--hyper-blue);
             background: rgba(77, 238, 234, 0.05);
         }
-        .themes-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .theme-pill {
-            border: 1px solid var(--border-dim);
-            padding: 0.4rem 0.8rem;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-        }
         .highlight-card {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border-dim);
+            background: rgba(255, 100, 100, 0.05);
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            border-left: 3px solid #ff6b6b;
             padding: 1rem;
             margin-bottom: 0.75rem;
         }
         .highlight-card:hover {
-            border-color: var(--hyper-blue);
+            border-color: #ff6b6b;
+            background: rgba(255, 100, 100, 0.1);
         }
         .tweet-text {
             font-size: 1rem;
@@ -392,9 +381,7 @@
                 <span id="resultsStats"></span>
             </div>
             <div class="juicer-text" id="juicerContent"></div>
-            <label>Key Themes</label>
-            <div class="themes-grid" id="themesGrid"></div>
-            <label style="margin-top:1rem;">Highlighted Tweets</label>
+            <label style="color: #ff6b6b;">⚠ Top 3 Controversial Tweets</label>
             <div id="highlightsGrid"></div>
         </div>
     </div>
@@ -536,17 +523,15 @@
             document.getElementById('resultsTitle').textContent = `@${job.username}`;
             document.getElementById('resultsStats').textContent = `${job.tweets_scraped || 0} tweets, ${job.retweets_scraped || 0} retweets`;
             
-            // Analysis text
+            // Analysis text - extract summary section
             let analysisText = job.results.analysis || '';
-            if (analysisText.includes('## KEY THEMES')) {
-                analysisText = analysisText.split('## KEY THEMES')[0];
+            // Remove section headers and extract just the content
+            analysisText = analysisText.replace(/## ANALYSIS SUMMARY/gi, '').replace(/## TOP 3/gi, '').trim();
+            // Take only the summary part (before controversial tweets section)
+            if (analysisText.includes('1. "')) {
+                analysisText = analysisText.split('1. "')[0].trim();
             }
-            analysisText = analysisText.replace(/## .+/g, '').replace(/THE JUICER/i, '').trim();
-            document.getElementById('juicerContent').innerHTML = analysisText.split('\n\n').map(p => `<p style="margin-bottom:0.75rem;">${p}</p>`).join('');
-            
-            // Themes
-            const themes = job.results.themes || [];
-            document.getElementById('themesGrid').innerHTML = themes.map(t => `<div class="theme-pill">${t}</div>`).join('');
+            document.getElementById('juicerContent').innerHTML = analysisText.split('\n\n').filter(p => p.trim()).map(p => `<p style="margin-bottom:0.75rem;">${p}</p>`).join('');
             
             // Highlighted tweets
             const highlights = job.results.highlighted_tweets || [];

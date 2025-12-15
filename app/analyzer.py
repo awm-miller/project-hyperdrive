@@ -37,33 +37,33 @@ class GeminiAnalyzer:
     MAX_TOKENS_PER_CHUNK = 750_000
     CHARS_PER_TOKEN = 4
 
-    CHUNK_PROMPT = """You are analyzing tweets from @{username}.
+    CHUNK_PROMPT = """You are a forensic analyst examining tweets from @{username}.
 
 This is CHUNK {chunk_num} of {total_chunks}.
 
-TASK 1: Analyze the themes and content in these tweets.
+TASK 1: Provide a factual summary of the content in this chunk.
+- Key topics discussed
+- Events or news referenced
+- Notable patterns
 
-TASK 2: Pick out ALL tweets that are interesting, notable, or worth highlighting.
+TASK 2: Identify the MOST CONTROVERSIAL tweets in this chunk.
+Look for tweets that are:
+- Most likely to cause public backlash or criticism
+- Inflammatory, offensive, or problematic statements
+- Opinions that could be used against this person
+- Content that reveals concerning views
+
 Each tweet in the data includes a URL in brackets like [URL: https://...].
-Include ANY tweet that is:
-- Insightful or revealing about the person
-- Controversial, spicy, or attention-grabbing
-- Representative of key themes or interests
-- A strong opinion or hot take
-- Funny, witty, or memorable
-- Showing their personality
-
-Be GENEROUS - if in doubt, include it. We want comprehensive coverage.
 
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 
-## ANALYSIS
-[Your analysis of themes, tone, key points - 2-3 paragraphs]
+## CHUNK ANALYSIS
+[Factual summary of content - 1-2 paragraphs]
 
-## HIGHLIGHTED TWEETS
-1. "[exact tweet text]" | URL: [copy URL from data] | [brief reason]
-2. "[exact tweet text]" | URL: [copy URL from data] | [brief reason]
-... (include ALL notable tweets - could be 20, 50, or more)
+## CONTROVERSIAL TWEETS IN THIS CHUNK
+1. "[exact tweet text]" | URL: [copy URL from data] | [why controversial]
+2. "[exact tweet text]" | URL: [copy URL from data] | [why controversial]
+... (include all controversial tweets found in this chunk)
 
 ---
 
@@ -72,30 +72,29 @@ TWEETS TO ANALYZE:
 {tweets}
 """
 
-    FINAL_SUMMARY_PROMPT = """You are creating a FINAL REPORT for @{username} based on {total_tweets} tweets.
+    FINAL_SUMMARY_PROMPT = """You are creating a FINAL FORENSIC REPORT for @{username} based on {total_tweets} tweets.
 
-Below are analyses from {num_chunks} chunks.
+Below are analyses from {num_chunks} chunks, each containing controversial tweets found.
 
-YOUR TASK: Write ONE PUNCHY PARAGRAPH (4-6 sentences max) that captures the ESSENCE of this account.
+YOUR TASK:
+1. Write a CLINICAL SUMMARY of all material reviewed (2-3 paragraphs)
+   - Total volume and date range of content
+   - Primary topics and subjects discussed
+   - Notable patterns in behavior or rhetoric
+   - Key events or controversies referenced
 
-Think of it like a "juicer" - the concentrated extract of who this person is online.
-- What defines them?
-- What do they care about most? 
-- What's their vibe?
-- Any spicy takes or patterns?
+2. From all the controversial tweets identified across chunks, select the TOP 3 WORST/MOST PROBLEMATIC ones.
 
-Be direct, insightful, maybe a little provocative. No fluff. No bullet points in the summary.
-
-After the paragraph, list 3-5 KEY THEMES as bullet points.
+Keep it factual and objective, like an intelligence briefing.
 
 FORMAT:
-## THE JUICER
-[Your punchy paragraph here]
+## ANALYSIS SUMMARY
+[Clinical summary - factual, objective]
 
-## KEY THEMES
-- [theme 1]
-- [theme 2]
-...
+## TOP 3 CONTROVERSIAL TWEETS
+1. "[exact tweet]" | URL: [url] | [why problematic]
+2. "[exact tweet]" | URL: [url] | [why problematic]
+3. "[exact tweet]" | URL: [url] | [why problematic]
 
 ---
 
@@ -104,40 +103,34 @@ CHUNK ANALYSES:
 {chunk_analyses}
 """
 
-    SINGLE_PROMPT = """You are analyzing tweets from @{username}.
+    SINGLE_PROMPT = """You are a forensic analyst examining the Twitter/X activity of @{username}.
 
-TASK 1: Write ONE PUNCHY PARAGRAPH (4-6 sentences) that captures the ESSENCE of this account.
-Think of it like a "juicer" - the concentrated extract of who this person is online.
-Be direct, insightful, maybe provocative. No fluff.
+TASK 1: Write a CLINICAL SUMMARY of the material reviewed.
+- How many tweets/retweets were analyzed
+- The date range covered
+- The primary topics and subjects discussed
+- Notable patterns in posting behavior
+- Any significant events or controversies referenced
+Keep it factual and objective, like an intelligence briefing. 2-3 paragraphs.
 
-TASK 2: List 3-5 KEY THEMES as bullet points.
+TASK 2: Identify the TOP 3 MOST CONTROVERSIAL tweets.
+Look for tweets that are:
+- Most likely to cause public backlash or criticism
+- Inflammatory, offensive, or problematic statements
+- Opinions that could be used against this person
+- Content that reveals concerning views or behavior
 
-TASK 3: Pick out ALL tweets that are interesting, notable, or worth highlighting.
 Each tweet in the data includes a URL in brackets like [URL: https://...].
-Include ANY tweet that is:
-- Spicy, controversial, or attention-grabbing
-- Revealing of their worldview or personality
-- Representative of their interests or obsessions
-- A strong opinion or hot take
-- Funny, witty, or memorable
-- Shows who they really are
-
-Be GENEROUS - if in doubt, include it. We want comprehensive coverage, not a tiny selection.
 
 FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 
-## THE JUICER
-[Your punchy paragraph here - no bullet points, just prose]
+## ANALYSIS SUMMARY
+[Your clinical summary here - factual, objective, like an intelligence briefing]
 
-## KEY THEMES
-- [theme 1]
-- [theme 2]
-(3-5 themes)
-
-## HIGHLIGHTED TWEETS
-1. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why notable]
-2. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why notable]
-... (include ALL notable tweets - could be 30, 50, 100+)
+## TOP 3 CONTROVERSIAL TWEETS
+1. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why this is controversial/problematic]
+2. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why this is controversial/problematic]
+3. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why this is controversial/problematic]
 
 ---
 

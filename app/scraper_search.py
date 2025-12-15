@@ -98,21 +98,24 @@ class NitterSearchScraper:
         try:
             if self.docker_mode:
                 # Docker mode: connect directly to Redis
-                result = subprocess.run(
-                    ["redis-cli", "-h", self.nitter_redis_host, "FLUSHALL"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
+                cmd = ["redis-cli", "-h", self.nitter_redis_host, "FLUSHALL"]
             else:
                 # Host mode: use docker exec
-                result = subprocess.run(
-                    ["docker", "exec", "nitter-redis", "redis-cli", "FLUSHALL"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-            return result.returncode == 0
+                cmd = ["docker", "exec", "nitter-redis", "redis-cli", "FLUSHALL"]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                logger.info(f"    Redis flush SUCCESS: {result.stdout.strip()}")
+                return True
+            else:
+                logger.error(f"    Redis flush FAILED: {result.stderr.strip()}")
+                return False
         except Exception as e:
             logger.error(f"    Redis flush error: {e}")
             return False
@@ -149,6 +152,10 @@ class NitterSearchScraper:
             text=True,
             timeout=30
         )
+        if result.returncode == 0:
+            logger.info("    Nitter stopped successfully")
+        else:
+            logger.error(f"    Nitter stop FAILED: {result.stderr.strip()}")
         return result.returncode == 0
 
     def _start_nitter(self) -> bool:
@@ -165,6 +172,10 @@ class NitterSearchScraper:
             text=True,
             timeout=60
         )
+        if result.returncode == 0:
+            logger.info("    Nitter started successfully")
+        else:
+            logger.error(f"    Nitter start FAILED: {result.stderr.strip()}")
         return result.returncode == 0
 
     def _switch_vpn(self) -> bool:
@@ -269,18 +280,18 @@ class NitterSearchScraper:
             # Connect VPN first (if not already connected)
             self._connect_vpn()
             
-            # 1. Flush Redis (clear rate limit cache)
-            self._flush_redis()
-            
-            # 2. Stop Nitter
+            # 1. Stop Nitter FIRST (so it can't write back to Redis)
             if not self._stop_nitter():
                 logger.warning("    Failed to stop Nitter (continuing anyway)")
+            
+            # 2. Flush Redis AFTER stopping (now safe to clear)
+            self._flush_redis()
             
             # 3. Switch VPN IP
             if not self._switch_vpn():
                 logger.warning("    VPN switch failed (continuing anyway)")
             
-            # 4. Start Nitter
+            # 4. Start Nitter with clean Redis
             if not self._start_nitter():
                 logger.error("    Failed to start Nitter")
                 return False
