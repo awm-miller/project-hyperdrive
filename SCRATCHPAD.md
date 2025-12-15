@@ -111,6 +111,63 @@ curl -s http://localhost:8081/search?q=test | head -5
 
 ---
 
+## VPS Startup Procedure (After Reboot)
+
+Run these commands in order after a VPS restart:
+
+```bash
+# 1. Navigate to project
+cd /opt/project-hyperdrive
+
+# 2. Start Redis queue (job storage)
+docker start redis-queue
+
+# 3. Start API server
+docker-compose up -d api
+
+# 4. Start Nitter Redis caches
+docker start nitter-redis-1 nitter-redis-2
+
+# 5. Start Nitter instances
+docker start nitter-1 nitter-2
+
+# 6. Wait for Nitter to be ready
+sleep 10
+
+# 7. Start workers
+docker start worker-1 worker-2
+
+# 8. Connect Mullvad VPNs
+docker exec worker-1 mullvad connect
+docker exec worker-2 mullvad connect
+
+# 9. Start dashboard
+sudo systemctl start hyperdrive-dashboard
+
+# 10. Verify everything is running
+docker ps
+sudo systemctl status hyperdrive-dashboard
+```
+
+### Quick Health Check
+
+```bash
+# All containers running?
+docker ps
+
+# Workers connected to VPN?
+docker exec worker-1 mullvad status
+docker exec worker-2 mullvad status
+
+# Dashboard running?
+curl -s http://127.0.0.1:8888/api/health
+
+# API running?
+curl -s http://localhost:3000/api/health
+```
+
+---
+
 ## Quick Commands
 
 ```bash
