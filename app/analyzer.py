@@ -72,29 +72,27 @@ TWEETS TO ANALYZE:
 {tweets}
 """
 
-    FINAL_SUMMARY_PROMPT = """You are creating a FINAL FORENSIC REPORT for @{username} based on {total_tweets} tweets.
+    FINAL_SUMMARY_PROMPT = """You are creating a FINAL FORENSIC REPORT for @{username}.
 
-Below are analyses from {num_chunks} chunks, each containing controversial tweets found.
+MATERIAL VOLUME: {total_tweets} total tweets and retweets were analyzed across {num_chunks} chunks.
+
+Below are the analyses from each chunk.
 
 YOUR TASK:
 1. Write a CLINICAL SUMMARY of all material reviewed (2-3 paragraphs)
-   - Total volume and date range of content
+   - State that {total_tweets} tweets/retweets were analyzed (use this exact number)
+   - Identify the date range from the data
    - Primary topics and subjects discussed
    - Notable patterns in behavior or rhetoric
    - Key events or controversies referenced
 
-2. From all the controversial tweets identified across chunks, select the TOP 3 WORST/MOST PROBLEMATIC ones.
+2. The controversial tweets have already been identified in each chunk analysis below. Do NOT repeat them here.
 
 Keep it factual and objective, like an intelligence briefing.
 
 FORMAT:
 ## ANALYSIS SUMMARY
-[Clinical summary - factual, objective]
-
-## TOP 3 CONTROVERSIAL TWEETS
-1. "[exact tweet]" | URL: [url] | [why problematic]
-2. "[exact tweet]" | URL: [url] | [why problematic]
-3. "[exact tweet]" | URL: [url] | [why problematic]
+[Clinical summary - factual, objective, 2-3 paragraphs]
 
 ---
 
@@ -105,20 +103,24 @@ CHUNK ANALYSES:
 
     SINGLE_PROMPT = """You are a forensic analyst examining the Twitter/X activity of @{username}.
 
+MATERIAL VOLUME: {tweet_count} total tweets and retweets are provided below for analysis.
+
 TASK 1: Write a CLINICAL SUMMARY of the material reviewed.
-- How many tweets/retweets were analyzed
-- The date range covered
+- State the volume analyzed (use the number provided above)
+- The date range covered (look at the earliest and latest dates in the data)
 - The primary topics and subjects discussed
 - Notable patterns in posting behavior
 - Any significant events or controversies referenced
 Keep it factual and objective, like an intelligence briefing. 2-3 paragraphs.
 
-TASK 2: Identify the TOP 3 MOST CONTROVERSIAL tweets.
+TASK 2: Identify ALL CONTROVERSIAL tweets in the material.
 Look for tweets that are:
 - Most likely to cause public backlash or criticism
 - Inflammatory, offensive, or problematic statements
 - Opinions that could be used against this person
 - Content that reveals concerning views or behavior
+
+Be thorough - include every tweet that could be considered controversial. Could be 5, 10, 20 or more.
 
 Each tweet in the data includes a URL in brackets like [URL: https://...].
 
@@ -127,10 +129,10 @@ FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 ## ANALYSIS SUMMARY
 [Your clinical summary here - factual, objective, like an intelligence briefing]
 
-## TOP 3 CONTROVERSIAL TWEETS
-1. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why this is controversial/problematic]
-2. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why this is controversial/problematic]
-3. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why this is controversial/problematic]
+## CONTROVERSIAL TWEETS
+1. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why controversial]
+2. "[EXACT tweet text]" | URL: [copy the URL from the data] | [why controversial]
+... (include ALL controversial tweets found)
 
 ---
 
@@ -197,8 +199,8 @@ TWEETS:
         for line in lines:
             line_stripped = line.strip()
             
-            # Detect highlights section
-            if 'HIGHLIGHTED TWEETS' in line.upper() or 'NOTABLE TWEETS' in line.upper():
+            # Detect highlights section (multiple possible headers)
+            if any(x in line.upper() for x in ['HIGHLIGHTED TWEETS', 'NOTABLE TWEETS', 'CONTROVERSIAL TWEETS', 'TOP 3']):
                 in_highlights = True
                 continue
             
@@ -395,6 +397,7 @@ TWEETS:
         else:
             prompt = self.SINGLE_PROMPT.format(
                 username=username,
+                tweet_count=tweet_count,
                 tweets=compiled_tweets,
             )
 

@@ -1,0 +1,13 @@
+# Copy this to .env and fill in your values
+
+# VPS SSH Configuration
+VPS_HOST=your-vps-ip-or-hostname
+VPS_USER=root
+VPS_SSH_KEY=~/.ssh/id_rsa
+
+# VPS API (for job tracking)
+VPS_API_URL=http://your-vps-ip:3000
+
+# Project path on VPS
+VPS_PROJECT_PATH=/opt/project-hyperdrive
+
