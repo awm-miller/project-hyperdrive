@@ -142,7 +142,13 @@ TWEETS:
 
     def _get_model(self):
         if self._model is None:
-            self._model = genai.GenerativeModel(self.model_name)
+            # Force JSON-only output from Gemini
+            self._model = genai.GenerativeModel(
+                self.model_name,
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json"
+                )
+            )
         return self._model
 
     def _estimate_tokens(self, text: str) -> int:
@@ -204,26 +210,26 @@ TWEETS:
         text = response_text.strip()
         
         # Remove markdown code blocks if present
-        if text.startswith('```'):
-            # Find the end of the code block
+        if '```' in text:
             lines = text.split('\n')
             json_lines = []
             in_block = False
             for line in lines:
-                if line.startswith('```'):
+                if line.strip().startswith('```'):
                     in_block = not in_block
                     continue
-                if in_block or not line.startswith('```'):
+                if in_block:
                     json_lines.append(line)
-            text = '\n'.join(json_lines).strip()
+            if json_lines:
+                text = '\n'.join(json_lines).strip()
         
         # Try direct parse
         try:
             return json.loads(text)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug(f"Direct JSON parse failed: {e}")
         
-        # Try to find JSON object in text
+        # Try to find JSON object in text (greedy match)
         match = re.search(r'\{[\s\S]*\}', text)
         if match:
             try:
@@ -231,8 +237,33 @@ TWEETS:
             except json.JSONDecodeError:
                 pass
         
-        logger.warning(f"Failed to parse JSON response: {text[:200]}...")
-        return {"summary": text, "flagged": []}
+        # Try to extract flagged array separately using regex
+        flagged = []
+        flagged_match = re.search(r'"flagged"\s*:\s*\[([\s\S]*?)\]', text)
+        if flagged_match:
+            # Try to parse individual flag entries
+            flag_pattern = r'\{\s*"index"\s*:\s*(\d+)\s*,\s*"reason"\s*:\s*"([^"]*)"'
+            for m in re.finditer(flag_pattern, flagged_match.group(1)):
+                try:
+                    flagged.append({"index": int(m.group(1)), "reason": m.group(2)})
+                except (ValueError, IndexError):
+                    continue
+            if flagged:
+                logger.info(f"Extracted {len(flagged)} flags via regex fallback")
+        
+        # Try to extract summary
+        summary = ""
+        summary_match = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+        if summary_match:
+            summary = summary_match.group(1)
+        else:
+            # Just use the raw text as summary
+            summary = text[:1000] if len(text) > 1000 else text
+        
+        if not flagged:
+            logger.warning(f"Failed to parse JSON response, no flags extracted: {text[:200]}...")
+        
+        return {"summary": summary, "flagged": flagged}
 
     def _analyze_chunk(
         self, 
