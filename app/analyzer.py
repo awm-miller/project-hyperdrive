@@ -47,12 +47,13 @@ Each tweet has an INDEX number like [INDEX: 5]. Use these indices to identify tw
 
 TASK 1: Write a brief summary of the content in this chunk (2-3 sentences).
 
-TASK 2: Identify ALL CONTROVERSIAL tweets by their INDEX.
-Look for tweets that are:
-- Inflammatory, offensive, or problematic statements
-- Most likely to cause public backlash or criticism
-- Opinions that could be used against this person
-- Content that reveals concerning views or behavior
+TASK 2: Identify the MOST CONTROVERSIAL tweets by their INDEX.
+Flag only tweets that are CLEARLY problematic - not just political opinions. Look for:
+- Genuinely inflammatory, offensive, or hateful statements
+- Content that could cause serious public backlash
+- Statements that are objectively concerning (threats, slurs, etc.)
+
+Limit to TOP 20 most controversial in this chunk. Do NOT flag normal political opinions.
 
 RESPOND WITH VALID JSON ONLY (no markdown, no extra text):
 {{
@@ -62,8 +63,6 @@ RESPOND WITH VALID JSON ONLY (no markdown, no extra text):
     {{"index": 12, "reason": "Short reason why controversial"}}
   ]
 }}
-
-Be thorough - flag every tweet that could be considered controversial.
 
 ---
 
@@ -105,14 +104,13 @@ TASK 1: Write a ONE PARAGRAPH clinical summary (4-6 sentences max).
 Include: volume analyzed, main topics, and any notable patterns.
 Be concise and factual.
 
-TASK 2: Identify ALL CONTROVERSIAL tweets by their INDEX number.
-Look for tweets that are:
-- Inflammatory, offensive, or problematic statements
-- Most likely to cause public backlash or criticism
-- Opinions that could be used against this person
-- Content that reveals concerning views or behavior
+TASK 2: Identify the MOST CONTROVERSIAL tweets by their INDEX number.
+Flag only tweets that are CLEARLY problematic - not just political opinions. Look for:
+- Genuinely inflammatory, offensive, or hateful statements
+- Content that could cause serious public backlash
+- Statements that are objectively concerning (threats, slurs, etc.)
 
-Be thorough - flag every tweet that could be considered controversial.
+Limit to the TOP 50 MOST controversial tweets maximum. Do NOT flag normal political opinions or criticism.
 
 RESPOND WITH VALID JSON ONLY (no markdown, no extra text):
 {{
@@ -142,11 +140,12 @@ TWEETS:
 
     def _get_model(self):
         if self._model is None:
-            # Force JSON-only output from Gemini
+            # Force JSON-only output from Gemini with high token limit
             self._model = genai.GenerativeModel(
                 self.model_name,
                 generation_config=genai.GenerationConfig(
-                    response_mime_type="application/json"
+                    response_mime_type="application/json",
+                    max_output_tokens=16384,  # Increase from default ~8K
                 )
             )
         return self._model
