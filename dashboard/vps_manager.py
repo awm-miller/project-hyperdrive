@@ -1,9 +1,10 @@
 """
-VPS Manager - SSH commands to manage remote workers
+VPS Manager - Commands to manage workers
+Supports both local mode (running on VPS) and remote mode (via SSH)
 """
 
 import os
-import paramiko
+import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -11,17 +12,27 @@ load_dotenv()
 
 
 class VPSManager:
-    """Manages VPS via SSH for worker operations."""
+    """Manages VPS for worker operations. Supports local and SSH modes."""
 
     def __init__(self):
-        self.host = os.getenv("VPS_HOST")
-        self.user = os.getenv("VPS_USER", "root")
-        self.ssh_key = os.path.expanduser(os.getenv("VPS_SSH_KEY", "~/.ssh/id_rsa"))
+        self.host = os.getenv("VPS_HOST", "localhost")
         self.project_path = os.getenv("VPS_PROJECT_PATH", "/opt/project-hyperdrive")
-        self._client = None
+        
+        # Local mode if running on VPS itself (no host specified or localhost)
+        self.local_mode = self.host in ["localhost", "127.0.0.1", ""]
+        
+        # SSH mode setup
+        if not self.local_mode:
+            import paramiko
+            self.user = os.getenv("VPS_USER", "root")
+            self.ssh_key = os.path.expanduser(os.getenv("VPS_SSH_KEY", "~/.ssh/id_rsa"))
+            self._client = None
 
-    def _connect(self) -> paramiko.SSHClient:
-        """Get or create SSH connection."""
+    def _connect(self):
+        """Get or create SSH connection (remote mode only)."""
+        if self.local_mode:
+            return None
+        import paramiko
         if self._client is None or not self._client.get_transport() or not self._client.get_transport().is_active():
             self._client = paramiko.SSHClient()
             self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -33,11 +44,17 @@ class VPSManager:
         return self._client
 
     def run_command(self, cmd: str) -> tuple[str, str, int]:
-        """Run command on VPS, return (stdout, stderr, exit_code)."""
-        client = self._connect()
-        stdin, stdout, stderr = client.exec_command(cmd)
-        exit_code = stdout.channel.recv_exit_status()
-        return stdout.read().decode(), stderr.read().decode(), exit_code
+        """Run command, return (stdout, stderr, exit_code)."""
+        if self.local_mode:
+            # Run locally via subprocess
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            return result.stdout, result.stderr, result.returncode
+        else:
+            # Run via SSH
+            client = self._connect()
+            stdin, stdout, stderr = client.exec_command(cmd)
+            exit_code = stdout.channel.recv_exit_status()
+            return stdout.read().decode(), stderr.read().decode(), exit_code
 
     def get_env_vars(self) -> str:
         """Get export command for env vars."""

@@ -1,0 +1,19 @@
+# Systemd service for Hyperdrive Dashboard
+# Place in /etc/systemd/system/hyperdrive-dashboard.service
+
+[Unit]
+Description=Hyperdrive Dashboard
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/project-hyperdrive/dashboard
+Environment="PATH=/opt/project-hyperdrive/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/project-hyperdrive/venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8888
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
