@@ -1,5 +1,32 @@
 # Project Hyperdrive - Operations Scratchpad
 
+## Branching Strategy
+
+| Branch | Purpose | Netlify | VPS |
+|--------|---------|---------|-----|
+| `main` | Production | project-hyperdrive.netlify.app | 161.35.160.229 (prod) |
+| `staging` | Testing | staging--project-hyperdrive.netlify.app | TBD (staging droplet) |
+
+**Workflow:**
+1. Develop on `staging` branch
+2. Test on staging environment
+3. When ready, merge `staging` → `main` for production
+
+```bash
+# Switch to staging for development
+git checkout staging
+
+# Make changes, commit, push
+git add -A && git commit -m "feature" && git push
+
+# When ready for prod
+git checkout main
+git merge staging
+git push
+```
+
+---
+
 ## VPS Deployment Notes
 
 ### Why Workers Need Manual Start
