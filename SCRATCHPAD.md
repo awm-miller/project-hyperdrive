@@ -108,6 +108,8 @@ curl -s http://localhost:8081/search?q=test | head -5
 
 1. **Nitter health checks are too strict** - Consider removing or relaxing them
 2. **Workers block on unhealthy Nitter** - Use manual docker run as workaround
+3. **API runs on host, not in Docker** - Should containerize for consistency
+4. **Redis persistence** - Need to set up persistent volume for redis-queue to survive reboots
 
 ---
 

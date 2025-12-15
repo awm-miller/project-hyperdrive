@@ -49,7 +49,8 @@ class Job:
     # Results
     analysis: str = ""
     themes: List[str] = field(default_factory=list)
-    highlighted_tweets: List[Dict[str, Any]] = field(default_factory=list)
+    highlighted_tweets: List[Dict[str, Any]] = field(default_factory=list)  # Legacy
+    all_tweets: List[Dict[str, Any]] = field(default_factory=list)  # New: all tweets with flags
     error: Optional[str] = None
     
     # Timestamps
@@ -70,6 +71,9 @@ class Job:
     def from_dict(cls, data: dict) -> 'Job':
         """Create from dictionary."""
         data['status'] = JobStatus(data.get('status', 'pending'))
+        # Handle missing all_tweets field for backward compatibility
+        if 'all_tweets' not in data:
+            data['all_tweets'] = []
         return cls(**data)
 
 
@@ -175,6 +179,7 @@ class JobQueue:
         highlighted_tweets: List[Dict[str, Any]],
         tweets_scraped: int,
         retweets_scraped: int,
+        all_tweets: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Mark a job as completed with results."""
         job.status = JobStatus.COMPLETED
@@ -186,8 +191,10 @@ class JobQueue:
         job.highlighted_tweets = highlighted_tweets
         job.tweets_scraped = tweets_scraped
         job.retweets_scraped = retweets_scraped
+        if all_tweets is not None:
+            job.all_tweets = all_tweets
         self.update_job(job)
-        logger.info(f"Job {job.id} completed")
+        logger.info(f"Job {job.id} completed with {len(job.all_tweets)} total tweets")
     
     def fail_job(self, job: Job, error: str) -> None:
         """Mark a job as failed."""

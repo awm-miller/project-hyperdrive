@@ -154,6 +154,32 @@ class HighlightedTweet(BaseModel):
     images: list[str] = []
 
 
+class StoredTweet(BaseModel):
+    """A tweet stored with flag information."""
+    index: int
+    text: str
+    date: str = ""
+    url: str = ""
+    is_retweet: bool = False
+    original_author: Optional[str] = None
+    images: list[str] = []
+    flagged: bool = False
+    flag_reason: Optional[str] = None
+
+
+class PaginatedTweetsResponse(BaseModel):
+    """Paginated response for all tweets."""
+    job_id: str
+    username: str
+    total_tweets: int
+    total_flagged: int
+    page: int
+    per_page: int
+    total_pages: int
+    tweets: list[StoredTweet]
+    analysis: str = ""
+
+
 class AnalyzeResponse(BaseModel):
     """Response for analysis endpoint."""
     username: str
@@ -311,6 +337,81 @@ async def get_job_status(job_id: str):
         started_at=job.started_at,
         completed_at=job.completed_at,
         worker_id=job.worker_id,
+    )
+
+
+@app.get("/api/jobs/{job_id}/tweets", response_model=PaginatedTweetsResponse)
+async def get_job_tweets(
+    job_id: str,
+    page: int = 1,
+    per_page: int = 20,
+    flagged_first: bool = True,
+):
+    """
+    Get paginated tweets for a job with flag information.
+    
+    Tweets are sorted with flagged tweets first (if flagged_first=true),
+    then by date descending.
+    """
+    if not job_queue:
+        raise HTTPException(status_code=503, detail="Job queue not available")
+    
+    job = job_queue.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    all_tweets = job.all_tweets or []
+    
+    # Sort: flagged first if requested, then by date
+    if flagged_first:
+        sorted_tweets = sorted(
+            all_tweets,
+            key=lambda t: (not t.get("flagged", False), t.get("date", "")),
+        )
+    else:
+        sorted_tweets = sorted(
+            all_tweets,
+            key=lambda t: t.get("date", ""),
+            reverse=True,
+        )
+    
+    # Count flagged
+    total_flagged = sum(1 for t in all_tweets if t.get("flagged", False))
+    
+    # Paginate
+    total_tweets = len(sorted_tweets)
+    total_pages = (total_tweets + per_page - 1) // per_page if per_page > 0 else 1
+    
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_tweets = sorted_tweets[start_idx:end_idx]
+    
+    # Convert to response model
+    tweet_responses = [
+        StoredTweet(
+            index=t.get("index", 0),
+            text=t.get("text", ""),
+            date=t.get("date", ""),
+            url=t.get("url", ""),
+            is_retweet=t.get("is_retweet", False),
+            original_author=t.get("original_author"),
+            images=t.get("images", []),
+            flagged=t.get("flagged", False),
+            flag_reason=t.get("flag_reason"),
+        )
+        for t in page_tweets
+    ]
+    
+    return PaginatedTweetsResponse(
+        job_id=job.id,
+        username=job.username,
+        total_tweets=total_tweets,
+        total_flagged=total_flagged,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        tweets=tweet_responses,
+        analysis=job.analysis,
     )
 
 

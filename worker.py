@@ -104,7 +104,7 @@ class Worker:
         logger.info(f"  Date range: {job.start_date} to {job.end_date}")
         logger.info(f"{'='*60}")
         
-        all_tweets = []
+        raw_tweets = []
         retweets_count = 0
         tweets_count = 0
         
@@ -128,7 +128,7 @@ class Worker:
                     max_retweets=5000,
                 ) as scraper:
                     rt_result = await scraper.scrape_retweets(username=job.username)
-                    all_tweets.extend(rt_result.tweets)
+                    raw_tweets.extend(rt_result.tweets)
                     retweets_count = rt_result.total_scraped
                 
                 self.queue.update_progress(
@@ -154,7 +154,7 @@ class Worker:
                         include_retweets=False,
                         include_replies=job.include_replies,
                     )
-                    all_tweets.extend(search_result.tweets)
+                    raw_tweets.extend(search_result.tweets)
                     tweets_count = search_result.total_scraped
                 
                 self.queue.update_progress(
@@ -165,46 +165,41 @@ class Worker:
                 logger.info(f"[Step 2] Got {tweets_count} tweets/replies")
             
             # Check if we got any content
-            if not all_tweets:
+            if not raw_tweets:
                 self.queue.fail_job(job, "No tweets found")
                 return
             
-            # Step 3: Analyze with Gemini
+            # Step 3: Convert to indexed tweet format for analyzer
             self.queue.update_progress(job, 70, "Analyzing with Gemini...")
-            logger.info(f"[Step 3] Analyzing {len(all_tweets)} tweets with Gemini...")
+            logger.info(f"[Step 3] Analyzing {len(raw_tweets)} tweets with Gemini...")
             
-            # Build tweet lookup by URL for image matching
-            url_to_images = {}
-            for t in all_tweets:
-                url = getattr(t, 'url', '')
-                if url:
-                    url_to_images[url] = getattr(t, 'images', [])
+            # Build indexed tweets array
+            indexed_tweets = []
+            for idx, t in enumerate(raw_tweets):
+                tweet_dict = {
+                    "index": idx,
+                    "text": getattr(t, 'content', ''),
+                    "date": getattr(t, 'timestamp', ''),
+                    "url": getattr(t, 'url', ''),
+                    "is_retweet": getattr(t, 'is_retweet', False),
+                    "original_author": getattr(t, 'original_author', None),
+                    "images": getattr(t, 'images', []),
+                    "flagged": False,
+                    "flag_reason": None,
+                }
+                indexed_tweets.append(tweet_dict)
             
-            # Compile tweets - include URL for each tweet
-            # No truncation - the analyzer handles chunking internally
-            compiled_lines = []
-            for t in all_tweets:
-                url = getattr(t, 'url', '')
-                if getattr(t, 'is_retweet', False):
-                    original_author = getattr(t, 'original_author', 'unknown')
-                    line = f"[RETWEET of @{original_author}] [{t.timestamp}] {t.content} [URL: {url}]"
-                else:
-                    line = f"[{t.timestamp}] {t.content} [URL: {url}]"
-                compiled_lines.append(line)
-            compiled = "\n---\n".join(compiled_lines)
-            
-            logger.info(f"Compiled {len(all_tweets)} tweets into {len(compiled):,} characters")
+            logger.info(f"Built indexed tweets array: {len(indexed_tweets)} tweets")
             
             # Disconnect VPN before Gemini call (VPN may block Google API)
             self._disconnect_vpn()
             
             try:
-                # Run Gemini analysis
+                # Run Gemini analysis with indexed tweets
                 analyzer = GeminiAnalyzer(api_key=self.gemini_key)
                 analysis_result = analyzer.analyze(
-                    compiled_tweets=compiled,
+                    indexed_tweets=indexed_tweets,
                     username=job.username,
-                    tweet_count=len(all_tweets),
                     custom_prompt=job.custom_prompt,
                 )
             finally:
@@ -213,39 +208,52 @@ class Worker:
             
             self.queue.update_progress(job, 90, "Finalizing...")
             
-            # Process highlighted tweets - extract URLs and match images
-            highlighted_with_urls = []
-            for ht in analysis_result.highlighted_tweets:
-                text = ht.get("text", "")
-                reason = ht.get("reason", "")
-                url = ht.get("url", "")  # Gemini should return this now
-                
-                # Get images for this URL
-                images = url_to_images.get(url, []) if url else []
-                
-                highlighted_with_urls.append({
-                    "text": text,
-                    "reason": reason,
-                    "url": url,
-                    "images": images,
-                })
+            # Merge flags into indexed tweets
+            flagged_count = 0
+            for flag_info in analysis_result.flagged_indices:
+                idx = flag_info.get("index")
+                reason = flag_info.get("reason", "")
+                if idx is not None and 0 <= idx < len(indexed_tweets):
+                    indexed_tweets[idx]["flagged"] = True
+                    indexed_tweets[idx]["flag_reason"] = reason
+                    flagged_count += 1
             
-            # Complete the job
+            logger.info(f"Merged flags: {flagged_count} tweets flagged out of {len(indexed_tweets)}")
+            
+            # Sort tweets: flagged first, then by date
+            sorted_tweets = sorted(
+                indexed_tweets,
+                key=lambda t: (not t["flagged"], t.get("date", "")),
+            )
+            
+            # Build legacy highlighted_tweets for backward compatibility
+            highlighted_tweets = []
+            for t in sorted_tweets:
+                if t["flagged"]:
+                    highlighted_tweets.append({
+                        "text": t["text"],
+                        "reason": t["flag_reason"],
+                        "url": t["url"],
+                        "images": t.get("images", []),
+                    })
+            
+            # Complete the job with all tweets
             self.queue.complete_job(
                 job=job,
                 analysis=analysis_result.summary,
-                themes=analysis_result.themes,
-                highlighted_tweets=highlighted_with_urls,
+                themes=[],
+                highlighted_tweets=highlighted_tweets,
                 tweets_scraped=tweets_count,
                 retweets_scraped=retweets_count,
+                all_tweets=sorted_tweets,
             )
             
             logger.info(f"")
             logger.info(f"{'='*60}")
             logger.info(f"JOB COMPLETE: {job.id}")
             logger.info(f"  Tweets: {tweets_count}, Retweets: {retweets_count}")
-            logger.info(f"  Themes: {len(analysis_result.themes)}")
-            logger.info(f"  Highlights: {len(highlighted_with_urls)}")
+            logger.info(f"  Total content: {len(sorted_tweets)}")
+            logger.info(f"  Flagged: {flagged_count}")
             logger.info(f"{'='*60}")
             
         except Exception as e:
