@@ -225,9 +225,11 @@ TWEETS:
         
         # Try direct parse
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
+            logger.info(f"JSON parsed successfully. Keys: {list(parsed.keys())}, flagged count: {len(parsed.get('flagged', []))}")
+            return parsed
         except json.JSONDecodeError as e:
-            logger.debug(f"Direct JSON parse failed: {e}")
+            logger.warning(f"Direct JSON parse failed: {e}")
         
         # Try to find JSON object in text (greedy match)
         match = re.search(r'\{[\s\S]*\}', text)
@@ -261,7 +263,10 @@ TWEETS:
             summary = text[:1000] if len(text) > 1000 else text
         
         if not flagged:
-            logger.warning(f"Failed to parse JSON response, no flags extracted: {text[:200]}...")
+            # Log more of the response for debugging
+            logger.warning(f"Failed to parse JSON response, no flags extracted")
+            logger.warning(f"Response start: {text[:500]}")
+            logger.warning(f"Response end: {text[-500:]}")
         
         return {"summary": summary, "flagged": flagged}
 
