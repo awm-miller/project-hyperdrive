@@ -177,16 +177,19 @@
             border-left: 3px solid var(--hyper-blue);
             background: rgba(77, 238, 234, 0.05);
         }
+        #highlightsGrid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+        }
         .highlight-card {
-            background: rgba(255, 100, 100, 0.05);
-            border: 1px solid rgba(255, 100, 100, 0.3);
-            border-left: 3px solid #ff6b6b;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-dim);
             padding: 1rem;
-            margin-bottom: 0.75rem;
         }
         .highlight-card:hover {
-            border-color: #ff6b6b;
-            background: rgba(255, 100, 100, 0.1);
+            border-color: var(--hyper-blue);
+            background: rgba(77, 238, 234, 0.05);
         }
         .tweet-text {
             font-size: 1rem;
@@ -381,7 +384,7 @@
                 <span id="resultsStats"></span>
             </div>
             <div class="juicer-text" id="juicerContent"></div>
-            <label style="color: #ff6b6b;">⚠ Controversial Tweets</label>
+            <label>Controversial Tweets</label>
             <div id="highlightsGrid"></div>
         </div>
     </div>
