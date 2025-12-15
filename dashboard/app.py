@@ -175,6 +175,32 @@ async def get_queue_stats():
         raise HTTPException(500, str(e))
 
 
+@app.get("/api/stats")
+async def get_aggregate_stats():
+    """Get aggregate statistics across all jobs."""
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{VPS_API_URL}/api/jobs", timeout=10)
+            data = resp.json()
+            jobs = data.get("jobs", [])
+            
+            total_tweets = sum(j.get("tweets_scraped", 0) or 0 for j in jobs)
+            total_retweets = sum(j.get("retweets_scraped", 0) or 0 for j in jobs)
+            completed_jobs = len([j for j in jobs if j.get("status") == "completed"])
+            failed_jobs = len([j for j in jobs if j.get("status") == "failed"])
+            
+            return {
+                "total_tweets": total_tweets,
+                "total_retweets": total_retweets,
+                "total_content": total_tweets + total_retweets,
+                "total_jobs": len(jobs),
+                "completed_jobs": completed_jobs,
+                "failed_jobs": failed_jobs
+            }
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.get("/api/system")
 async def get_system_stats():
     """Get VPS system stats."""
@@ -477,11 +503,119 @@ DASHBOARD_HTML = """
         }
         
         .spinning { animation: spin 1s linear infinite; }
+        
+        /* Big Stats Banner */
+        .stats-banner {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .stat-card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        
+        .stat-card.highlight {
+            border-color: var(--accent);
+            background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), transparent);
+        }
+        
+        .stat-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        
+        .stat-card.highlight .stat-number {
+            font-size: 3rem;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 0.5rem;
+        }
+        
+        /* Job Detail Modal */
+        .job-detail-content {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        
+        .job-detail-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .job-detail-section h4 {
+            color: var(--accent);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+        
+        .job-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        
+        .job-detail-item {
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+        }
+        
+        .job-detail-item label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            display: block;
+        }
+        
+        .job-detail-item span {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .analysis-preview {
+            background: #000;
+            padding: 1rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .tweet-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .tweet-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+        }
+        
+        .tweet-item:last-child { border-bottom: none; }
+        
+        .job-card { cursor: pointer; }
+        .job-card:hover { border-color: var(--accent); }
     </style>
 </head>
 <body>
     <header class="header">
-        <div class="logo">⚡ HYPERDRIVE</div>
+        <div class="logo">⚡ HYPERDRIVE DASHBOARD</div>
         <div class="status-bar">
             <div class="status-item">
                 <div class="status-dot" id="vpsStatus"></div>
@@ -495,6 +629,26 @@ DASHBOARD_HTML = """
             </div>
         </div>
     </header>
+    
+    <!-- Big Stats Banner -->
+    <div class="stats-banner">
+        <div class="stat-card highlight">
+            <div class="stat-number" id="totalContent">--</div>
+            <div class="stat-label">Total Content Scraped</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="totalTweets">--</div>
+            <div class="stat-label">Tweets</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="totalRetweets">--</div>
+            <div class="stat-label">Retweets</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="completedJobs">--</div>
+            <div class="stat-label">Jobs Completed</div>
+        </div>
+    </div>
     
     <main class="main">
         <!-- Workers Panel -->
@@ -583,6 +737,19 @@ DASHBOARD_HTML = """
             <div class="modal-actions">
                 <button class="btn" onclick="closeModal('sessionsModal')">Cancel</button>
                 <button class="btn primary" onclick="saveSessions()">Save & Restart Nitters</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Job Detail Modal -->
+    <div class="modal" id="jobDetailModal">
+        <div class="modal-content" style="max-width:800px;">
+            <h3 class="modal-title">Job Details: <span id="jobDetailUser">@user</span></h3>
+            <div class="job-detail-content" id="jobDetailContent">
+                Loading...
+            </div>
+            <div class="modal-actions" style="margin-top:1rem;">
+                <button class="btn" onclick="closeModal('jobDetailModal')">Close</button>
             </div>
         </div>
     </div>
@@ -689,13 +856,14 @@ DASHBOARD_HTML = """
                     const statusClass = j.status === 'completed' ? 'healthy' : 
                                        j.status === 'running' ? 'busy' : 
                                        j.status === 'failed' ? 'unhealthy' : 'idle';
+                    const tweets = j.tweets_scraped || 0;
                     return `
-                        <div class="job-card">
+                        <div class="job-card" onclick="showJobDetail('${j.job_id}')">
                             <div class="job-header">
                                 <span class="job-user">@${j.username}</span>
                                 <span class="tag ${statusClass}">${j.status}</span>
                             </div>
-                            <div class="item-status">${j.current_step || j.status}</div>
+                            <div class="item-status">${j.current_step || j.status} ${tweets > 0 ? '| ' + tweets + ' tweets' : ''}</div>
                             <div class="job-progress">
                                 <div class="job-progress-fill" style="width: ${j.progress || 0}%"></div>
                             </div>
@@ -704,6 +872,97 @@ DASHBOARD_HTML = """
                 }).join('');
             } catch (e) {
                 console.error('Failed to refresh jobs:', e);
+            }
+        }
+        
+        async function refreshStats() {
+            try {
+                const stats = await api('/api/stats');
+                document.getElementById('totalContent').textContent = (stats.total_content || 0).toLocaleString();
+                document.getElementById('totalTweets').textContent = (stats.total_tweets || 0).toLocaleString();
+                document.getElementById('totalRetweets').textContent = (stats.total_retweets || 0).toLocaleString();
+                document.getElementById('completedJobs').textContent = stats.completed_jobs || 0;
+            } catch (e) {
+                console.error('Failed to refresh stats:', e);
+            }
+        }
+        
+        async function showJobDetail(jobId) {
+            document.getElementById('jobDetailModal').classList.add('active');
+            document.getElementById('jobDetailContent').innerHTML = 'Loading...';
+            
+            try {
+                const job = await api(`/api/jobs/${jobId}`);
+                document.getElementById('jobDetailUser').textContent = '@' + (job.username || 'unknown');
+                
+                const startTime = job.started_at ? new Date(job.started_at).toLocaleString() : 'N/A';
+                const endTime = job.completed_at ? new Date(job.completed_at).toLocaleString() : 'In progress';
+                const duration = job.started_at && job.completed_at 
+                    ? Math.round((new Date(job.completed_at) - new Date(job.started_at)) / 1000 / 60) + ' min'
+                    : 'N/A';
+                
+                let html = `
+                    <div class="job-detail-section">
+                        <h4>Job Info</h4>
+                        <div class="job-detail-grid">
+                            <div class="job-detail-item"><label>Job ID</label><span>${job.job_id || jobId}</span></div>
+                            <div class="job-detail-item"><label>Status</label><span>${job.status || 'unknown'}</span></div>
+                            <div class="job-detail-item"><label>Started</label><span>${startTime}</span></div>
+                            <div class="job-detail-item"><label>Completed</label><span>${endTime}</span></div>
+                            <div class="job-detail-item"><label>Duration</label><span>${duration}</span></div>
+                            <div class="job-detail-item"><label>Worker</label><span>${job.worker_id || 'N/A'}</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="job-detail-section">
+                        <h4>Scrape Results</h4>
+                        <div class="job-detail-grid">
+                            <div class="job-detail-item"><label>Tweets</label><span style="font-size:1.2rem;color:var(--accent);">${(job.tweets_scraped || 0).toLocaleString()}</span></div>
+                            <div class="job-detail-item"><label>Retweets</label><span style="font-size:1.2rem;color:var(--accent);">${(job.retweets_scraped || 0).toLocaleString()}</span></div>
+                            <div class="job-detail-item"><label>Date Range</label><span>${job.start_date || '?'} to ${job.end_date || '?'}</span></div>
+                            <div class="job-detail-item"><label>Current Step</label><span>${job.current_step || 'Done'}</span></div>
+                        </div>
+                    </div>
+                `;
+                
+                if (job.error) {
+                    html += `
+                        <div class="job-detail-section">
+                            <h4>Error</h4>
+                            <div class="analysis-preview" style="color:var(--danger);">${job.error}</div>
+                        </div>
+                    `;
+                }
+                
+                if (job.analysis) {
+                    const preview = job.analysis.substring(0, 1000) + (job.analysis.length > 1000 ? '...' : '');
+                    html += `
+                        <div class="job-detail-section">
+                            <h4>Analysis Preview</h4>
+                            <div class="analysis-preview">${preview}</div>
+                        </div>
+                    `;
+                }
+                
+                if (job.highlighted_tweets && job.highlighted_tweets.length > 0) {
+                    html += `
+                        <div class="job-detail-section">
+                            <h4>Highlighted Tweets (${job.highlighted_tweets.length})</h4>
+                            <div class="tweet-list">
+                                ${job.highlighted_tweets.map(t => `
+                                    <div class="tweet-item">
+                                        <div style="color:var(--text-dim);font-size:0.7rem;">${t.date || ''}</div>
+                                        <div>${t.text || t}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('jobDetailContent').innerHTML = html;
+            } catch (e) {
+                document.getElementById('jobDetailContent').innerHTML = 'Error loading job: ' + e.message;
             }
         }
         
@@ -794,11 +1053,13 @@ DASHBOARD_HTML = """
         refreshNitters();
         refreshJobs();
         refreshSystem();
+        refreshStats();
         
         // Auto refresh
         setInterval(refreshWorkers, 30000);
         setInterval(refreshJobs, 10000);
         setInterval(refreshSystem, 60000);
+        setInterval(refreshStats, 30000);
     </script>
 </body>
 </html>

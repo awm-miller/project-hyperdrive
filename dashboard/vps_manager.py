@@ -142,7 +142,11 @@ class VPSManager:
                 -e NITTER_REDIS_HOST=nitter-redis-{worker_num} \\
                 -e MULLVAD_ACCOUNT="$MULLVAD_ACCOUNT" \\
                 -e GEMINI_API_KEY="$GEMINI_API_KEY" \\
-                project-hyperdrive_worker-1:latest"""
+                project-hyperdrive_worker-1:latest""",
+            # Wait for worker container to start
+            "sleep 3",
+            # Connect Mullvad VPN
+            f"docker exec worker-{worker_num} mullvad connect"
         ]
         
         full_cmd = " && ".join(commands)
