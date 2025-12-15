@@ -120,10 +120,26 @@ class NitterSearchScraper:
     def _stop_nitter(self) -> bool:
         """Stop Nitter container (keep Redis running)."""
         if self.docker_mode:
-            # In Docker mode, we can't restart sibling containers
-            # Just return True - VPN rotation + Redis flush should be enough
-            logger.info("    Docker mode: skipping Nitter restart")
-            return True
+            # In Docker mode, use docker CLI to restart sibling container
+            # Extract nitter container name from URL (e.g., http://nitter-1:8080 -> nitter-1)
+            nitter_name = self.nitter_url.split("//")[1].split(":")[0]
+            logger.info(f"    Docker mode: restarting {nitter_name}...")
+            try:
+                result = subprocess.run(
+                    ["docker", "restart", nitter_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    logger.info(f"    Restarted {nitter_name}")
+                    return True
+                else:
+                    logger.warning(f"    Failed to restart {nitter_name}: {result.stderr}")
+                    return False
+            except Exception as e:
+                logger.warning(f"    Docker restart error: {e}")
+                return False
         
         logger.info("    Stopping Nitter...")
         result = subprocess.run(
@@ -138,7 +154,7 @@ class NitterSearchScraper:
     def _start_nitter(self) -> bool:
         """Start Nitter container."""
         if self.docker_mode:
-            # In Docker mode, Nitter stays running
+            # In Docker mode, restart already handled in _stop_nitter
             return True
         
         logger.info("    Starting Nitter...")

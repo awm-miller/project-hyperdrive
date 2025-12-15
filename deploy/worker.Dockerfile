@@ -3,7 +3,7 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies
+# Install dependencies including Docker CLI for container management
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     iproute2 \
     iptables \
     redis-tools \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Mullvad VPN

@@ -55,4 +55,66 @@ All tasks completed. To use the application:
 - .env.example files may be blocked by globalignore - use env.example instead
 - Nitter requires Redis for caching
 - Self-hosted Nitter still relies on Twitter backend and may need guest tokens
+- **Mullvad VPN in Docker**: Mullvad overrides DNS, breaking Docker hostname resolution. Fix: resolve hostnames to IPs BEFORE Mullvad connects and add to /etc/hosts
+- **Redis package**: Must be in requirements.txt for workers to connect to job queue
+- **API server restart**: After code changes, must restart uvicorn (it was running since Dec 12!)
+- **Worker heartbeat TTL**: Workers filtered out if last_seen > 30 seconds ago
+
+## Production Deployment Notes (DigitalOcean VPS)
+
+### Current Architecture
+- **VPS**: 161.35.160.229, running Ubuntu
+- **FastAPI**: uvicorn on port 3000 (running on host, not in container)
+- **Workers**: 2 Docker containers (worker-1, worker-2) with Mullvad VPN each
+- **Nitter**: 2 instances (nitter-1:8081, nitter-2:8082) with dedicated Redis caches
+- **Job Queue**: Redis (redis-queue:6379)
+
+### Known Issues & Maintenance Tasks
+
+#### Nitter Session Management (CRITICAL)
+- **Problem**: Nitter requires valid Twitter guest tokens/sessions to work
+- **Symptom**: `[sessions] no sessions available for API: .../SearchTimeline`
+- **Current state**: sessions.jsonl has 1 account session but it may be expired/rate-limited
+- **TODO**: 
+  1. Need to regularly refresh sessions.jsonl with valid guest tokens
+  2. Build telemetry dashboard to monitor Nitter health
+  3. Auto-restart Nitter when sessions expire
+  4. Consider running Nitter session generator (nitter-guest-tokens project?)
+
+#### How to Refresh Session Cookies
+1. Log into a Twitter/X account in browser (use burner accounts!)
+2. Export cookies using a browser extension (e.g., "Get cookies.txt LOCALLY")
+3. Convert Netscape cookie format to Nitter JSONL format:
+   ```
+   {"kind":"cookie","username":"YOUR_USERNAME","id":"USER_ID","auth_token":"AUTH_TOKEN_VALUE","ct0":"CT0_VALUE"}
+   ```
+   - `auth_token` = from cookie named `auth_token`
+   - `ct0` = from cookie named `ct0`
+   - `id` = from `twid` cookie, decode URL: `u%3D1234567890` → `1234567890`
+4. Put in `sessions.jsonl` file in Nitter container
+5. Restart Nitter: `docker restart nitter-1 nitter-2`
+
+**IMPORTANT**: Use MULTIPLE different accounts to avoid rate limits. Twitter rate-limits per account, not per IP.
+
+#### Mullvad Device Limit
+- Mullvad allows max 5 devices per account
+- Each worker container registers as a new device on startup
+- **Fix**: Revoke old devices at https://mullvad.net/en/account before restarting workers
+
+### Startup Commands (VPS)
+```bash
+cd /opt/project-hyperdrive
+source venv/bin/activate
+
+# Start API server
+nohup uvicorn app.main:app --host 0.0.0.0 --port 3000 > app.log 2>&1 &
+
+# Start workers (after docker-compose infra is up)
+docker run -d --name worker-1 --network project-hyperdrive_default \
+  --cap-add=NET_ADMIN --device /dev/net/tun \
+  -e WORKER_ID=worker1 -e NITTER_URL=http://nitter-1:8080 \
+  -e REDIS_URL=redis://redis-queue:6379 -e NITTER_REDIS_HOST=nitter-redis-1 \
+  -e MULLVAD_ACCOUNT="$MULLVAD_ACCOUNT" -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+  project-hyperdrive_worker-1:latest
+```
 
