@@ -79,20 +79,13 @@ MATERIAL VOLUME: {total_tweets} total tweets and retweets were analyzed across {
 Below are the analyses from each chunk.
 
 YOUR TASK:
-1. Write a CLINICAL SUMMARY of all material reviewed (2-3 paragraphs)
-   - State that {total_tweets} tweets/retweets were analyzed (use this exact number)
-   - Identify the date range from the data
-   - Primary topics and subjects discussed
-   - Notable patterns in behavior or rhetoric
-   - Key events or controversies referenced
-
-2. The controversial tweets have already been identified in each chunk analysis below. Do NOT repeat them here.
-
-Keep it factual and objective, like an intelligence briefing.
+Write a ONE PARAGRAPH clinical summary (4-6 sentences max).
+State that {total_tweets} tweets/retweets were analyzed, the date range, main topics, and notable patterns.
+Be concise. The controversial tweets are already identified in the chunk analyses - do NOT repeat them.
 
 FORMAT:
 ## ANALYSIS SUMMARY
-[Clinical summary - factual, objective, 2-3 paragraphs]
+[One concise paragraph - 4-6 sentences]
 
 ---
 
@@ -105,13 +98,9 @@ CHUNK ANALYSES:
 
 MATERIAL VOLUME: {tweet_count} total tweets and retweets are provided below for analysis.
 
-TASK 1: Write a CLINICAL SUMMARY of the material reviewed.
-- State the volume analyzed (use the number provided above)
-- The date range covered (look at the earliest and latest dates in the data)
-- The primary topics and subjects discussed
-- Notable patterns in posting behavior
-- Any significant events or controversies referenced
-Keep it factual and objective, like an intelligence briefing. 2-3 paragraphs.
+TASK 1: Write a ONE PARAGRAPH clinical summary (4-6 sentences max).
+Include: volume analyzed, date range, main topics, and any notable patterns.
+Be concise and factual.
 
 TASK 2: Identify ALL CONTROVERSIAL tweets in the material.
 Look for tweets that are:
