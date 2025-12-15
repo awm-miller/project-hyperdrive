@@ -2,6 +2,11 @@
 
 [build]
   publish = "frontend"
+  ignore = "git submodule update"
+  
+[build.environment]
+  GIT_LFS_ENABLED = "false"
+  NPM_FLAGS = "--prefix=/dev/null"
 
 # Proxy API calls to VPS backend
 [[redirects]]
