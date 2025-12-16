@@ -11,6 +11,7 @@
             --star-white: #ffffff;
             --hyper-blue: #4deeea;
             --hyper-green: #74ee15;
+            --flag-red: #ff4757;
             --panel-bg: rgba(10, 10, 15, 0.9);
             --border-dim: rgba(255, 255, 255, 0.1);
         }
@@ -49,7 +50,7 @@
 
         /* Layout */
         .main-content {
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 2rem;
             padding-bottom: 200px;
@@ -168,6 +169,29 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .results-stats {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.8rem;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--star-white);
+        }
+        .stat-value.flagged {
+            color: var(--flag-red);
+        }
+        .stat-label {
+            font-size: 0.65rem;
+            color: #888;
+            text-transform: uppercase;
         }
         .juicer-text {
             font-size: 1.1rem;
@@ -177,32 +201,125 @@
             border-left: 3px solid var(--hyper-blue);
             background: rgba(77, 238, 234, 0.05);
         }
-        #highlightsGrid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.75rem;
+
+        /* Tweet List */
+        .tweets-section {
+            margin-top: 2rem;
         }
-        .highlight-card {
+        .tweets-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            max-width: 400px;
+        }
+        .search-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-dim);
+            color: var(--star-white);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--hyper-blue);
+        }
+        .search-input::placeholder {
+            color: #666;
+        }
+        .tweets-title {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--hyper-blue);
+            text-transform: uppercase;
+        }
+        .filter-toggle {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            background: transparent;
+            border: 1px solid var(--border-dim);
+            color: #888;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+        }
+        .filter-toggle.active {
+            border-color: var(--flag-red);
+            color: var(--flag-red);
+        }
+        
+        .tweet-card {
             background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--border-dim);
             padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.2s;
         }
-        .highlight-card:hover {
+        .tweet-card:hover {
             border-color: var(--hyper-blue);
-            background: rgba(77, 238, 234, 0.05);
+            background: rgba(77, 238, 234, 0.03);
+        }
+        .tweet-card.flagged {
+            border-left: 3px solid var(--flag-red);
+            background: rgba(255, 71, 87, 0.05);
+        }
+        .tweet-card.flagged:hover {
+            border-color: var(--flag-red);
+            background: rgba(255, 71, 87, 0.08);
+        }
+        .tweet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+        .tweet-date {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            color: #666;
+        }
+        .flag-badge {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.65rem;
+            background: var(--flag-red);
+            color: #000;
+            padding: 0.2rem 0.5rem;
+            text-transform: uppercase;
         }
         .tweet-text {
             font-size: 1rem;
+            line-height: 1.5;
             margin-bottom: 0.5rem;
-            font-style: italic;
+        }
+        .tweet-reason {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--flag-red);
+            padding: 0.5rem;
+            background: rgba(255, 71, 87, 0.1);
+            margin-bottom: 0.5rem;
         }
         .tweet-meta {
             font-family: 'Space Mono', monospace;
             font-size: 0.7rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
         }
         .tweet-meta a {
             color: var(--hyper-blue);
             text-decoration: none;
+        }
+        .tweet-meta .retweet-badge {
+            color: #888;
+            font-style: italic;
         }
         .tweet-images {
             display: flex;
@@ -211,8 +328,38 @@
             overflow-x: auto;
         }
         .tweet-img {
-            height: 120px;
+            height: 100px;
             border: 1px solid var(--border-dim);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+        }
+        .page-btn {
+            background: transparent;
+            border: 1px solid var(--border-dim);
+            color: var(--star-white);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .page-btn:hover:not(:disabled) {
+            border-color: var(--hyper-blue);
+            color: var(--hyper-blue);
+        }
+        .page-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .page-info {
+            color: #888;
         }
 
         /* Job Dashboard - Fixed Bottom Right */
@@ -237,22 +384,11 @@
             justify-content: space-between;
             align-items: center;
             color: var(--hyper-blue);
+            cursor: pointer;
+            user-select: none;
         }
-        .dashboard-stats {
-            display: flex;
-            gap: 1rem;
-        }
-        .stat {
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 1.2rem;
-            color: var(--star-white);
-        }
-        .stat-label {
-            font-size: 0.6rem;
-            color: #666;
-            text-transform: uppercase;
+        .dashboard-header:hover {
+            background: rgba(77, 238, 234, 0.05);
         }
         .jobs-list {
             flex: 1;
@@ -304,20 +440,8 @@
             text-align: center;
             color: #666;
         }
-
-        /* Job Dashboard Collapse */
-        .dashboard-header {
-            cursor: pointer;
-            user-select: none;
-        }
-        .dashboard-header:hover {
-            background: rgba(77, 238, 234, 0.05);
-        }
         .job-dashboard.collapsed .jobs-list {
             display: none;
-        }
-        .job-dashboard.collapsed {
-            max-height: auto;
         }
         .collapse-icon {
             display: inline-block;
@@ -325,6 +449,14 @@
         }
         .job-dashboard.collapsed .collapse-icon {
             transform: rotate(180deg);
+        }
+
+        /* Loading */
+        .loading-tweets {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            font-family: 'Space Mono', monospace;
         }
     </style>
 </head>
@@ -381,11 +513,38 @@
         <div class="results-panel" id="resultsPanel">
             <div class="results-header">
                 <h2 id="resultsTitle">Analysis Results</h2>
-                <span id="resultsStats"></span>
+                <div class="results-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalTweetsValue">0</div>
+                        <div class="stat-label">Total Tweets</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value flagged" id="flaggedValue">0</div>
+                        <div class="stat-label">Flagged</div>
+                    </div>
+                </div>
             </div>
             <div class="juicer-text" id="juicerContent"></div>
-            <label>Controversial Tweets</label>
-            <div id="highlightsGrid"></div>
+            
+            <div class="tweets-section">
+                <div class="tweets-header">
+                    <span class="tweets-title">All Tweets</span>
+                    <div class="search-box">
+                        <input type="text" class="search-input" id="tweetSearch" placeholder="Search tweets..." oninput="filterTweets()">
+                    </div>
+                    <button class="filter-toggle active" id="filterToggle" onclick="toggleFlaggedFirst()">
+                        Flagged First
+                    </button>
+                </div>
+                <div id="tweetsContainer">
+                    <div class="loading-tweets">Select a completed job to view tweets</div>
+                </div>
+                <div class="pagination" id="pagination" style="display:none;">
+                    <button class="page-btn" id="prevBtn" onclick="changePage(-1)">Prev</button>
+                    <span class="page-info" id="pageInfo">Page 1 of 1</span>
+                    <button class="page-btn" id="nextBtn" onclick="changePage(1)">Next</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -421,8 +580,16 @@
         document.getElementById('startDate').value = lastYear.toISOString().split('T')[0];
 
         // Job tracking
-        let myJobs = [];  // Jobs submitted by this client
+        let myJobs = [];
         let selectedJobId = null;
+        
+        // Pagination state
+        let currentPage = 1;
+        let totalPages = 1;
+        let flaggedFirst = true;
+        const perPage = 20;
+        let currentTweets = []; // Store current tweets for filtering
+        let searchQuery = '';
 
         // Submit job
         document.getElementById('analyzeForm').addEventListener('submit', async (e) => {
@@ -455,7 +622,6 @@
                 
                 const data = await resp.json();
                 
-                // Add to tracked jobs
                 myJobs.unshift({
                     id: data.job_id,
                     username: username,
@@ -464,13 +630,8 @@
                     current_step: 'Queued'
                 });
                 
-                // Select this job
                 selectedJobId = data.job_id;
-                
-                // Clear form
                 document.getElementById('username').value = '';
-                
-                // Update UI
                 renderJobsList();
                 
             } catch (err) {
@@ -512,37 +673,126 @@
         // Select a job to view results
         function selectJob(jobId) {
             selectedJobId = jobId;
+            currentPage = 1;
             renderJobsList();
             
             const job = myJobs.find(j => j.id === jobId);
-            if (job && job.status === 'completed' && job.results) {
+            if (job && job.status === 'completed') {
                 showResults(job);
+                loadTweets(jobId);
             }
         }
 
-        // Show results for a job
+        // Show results header and summary
         function showResults(job) {
             const panel = document.getElementById('resultsPanel');
             document.getElementById('resultsTitle').textContent = `@${job.username}`;
-            document.getElementById('resultsStats').textContent = `${job.tweets_scraped || 0} tweets, ${job.retweets_scraped || 0} retweets`;
             
-            // Analysis text - extract summary section
-            let analysisText = job.results.analysis || '';
-            // Remove section headers and extract just the content
-            analysisText = analysisText.replace(/## ANALYSIS SUMMARY/gi, '').replace(/## TOP 3/gi, '').trim();
-            // Take only the summary part (before controversial tweets section)
-            if (analysisText.includes('1. "')) {
-                analysisText = analysisText.split('1. "')[0].trim();
-            }
+            // Analysis text
+            let analysisText = job.results?.analysis || '';
             document.getElementById('juicerContent').innerHTML = analysisText.split('\n\n').filter(p => p.trim()).map(p => `<p style="margin-bottom:0.75rem;">${p}</p>`).join('');
             
-            // Highlighted tweets
-            const highlights = job.results.highlighted_tweets || [];
-            document.getElementById('highlightsGrid').innerHTML = highlights.map(t => `
-                <div class="highlight-card">
-                    <div class="tweet-text">"${t.text}"</div>
+            panel.classList.add('visible');
+        }
+
+        // Load tweets with pagination
+        async function loadTweets(jobId) {
+            const container = document.getElementById('tweetsContainer');
+            container.innerHTML = '<div class="loading-tweets">Loading tweets...</div>';
+            
+            try {
+                const resp = await fetch(`/api/jobs/${jobId}/tweets?page=${currentPage}&per_page=${perPage}&flagged_first=${flaggedFirst}`);
+                if (!resp.ok) throw new Error('Failed to load tweets');
+                
+                const data = await resp.json();
+                
+                // Update stats
+                document.getElementById('totalTweetsValue').textContent = data.total_tweets;
+                document.getElementById('flaggedValue').textContent = data.total_flagged;
+                
+                // Update pagination
+                totalPages = data.total_pages;
+                document.getElementById('pageInfo').textContent = `Page ${data.page} of ${totalPages}`;
+                document.getElementById('prevBtn').disabled = data.page <= 1;
+                document.getElementById('nextBtn').disabled = data.page >= totalPages;
+                document.getElementById('pagination').style.display = totalPages > 1 ? 'flex' : 'none';
+                
+                // Store tweets for filtering and render
+                currentTweets = data.tweets;
+                document.getElementById('tweetSearch').value = ''; // Clear search on new load
+                searchQuery = '';
+                renderFilteredTweets();
+                
+            } catch (err) {
+                container.innerHTML = `<div class="loading-tweets">Error: ${err.message}</div>`;
+            }
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Change page
+        function changePage(delta) {
+            const newPage = currentPage + delta;
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                if (selectedJobId) {
+                    loadTweets(selectedJobId);
+                }
+            }
+        }
+
+        // Toggle flagged first
+        function toggleFlaggedFirst() {
+            flaggedFirst = !flaggedFirst;
+            const btn = document.getElementById('filterToggle');
+            btn.classList.toggle('active', flaggedFirst);
+            btn.textContent = flaggedFirst ? 'Flagged First' : 'Date Order';
+            currentPage = 1;
+            if (selectedJobId) {
+                loadTweets(selectedJobId);
+            }
+        }
+
+        // Filter tweets by search query
+        function filterTweets() {
+            searchQuery = document.getElementById('tweetSearch').value.toLowerCase().trim();
+            renderFilteredTweets();
+        }
+
+        // Render tweets with search filter applied
+        function renderFilteredTweets() {
+            const container = document.getElementById('tweetsContainer');
+            
+            let filtered = currentTweets;
+            if (searchQuery) {
+                filtered = currentTweets.filter(t => 
+                    t.text.toLowerCase().includes(searchQuery) ||
+                    (t.flag_reason && t.flag_reason.toLowerCase().includes(searchQuery))
+                );
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="loading-tweets">${searchQuery ? 'No tweets match your search' : 'No tweets found'}</div>`;
+                document.getElementById('pagination').style.display = 'none';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(t => `
+                <div class="tweet-card ${t.flagged ? 'flagged' : ''}">
+                    <div class="tweet-header">
+                        <span class="tweet-date">${t.date || 'Unknown date'}</span>
+                        ${t.flagged ? '<span class="flag-badge">Flagged</span>' : ''}
+                    </div>
+                    <div class="tweet-text">${highlightSearch(escapeHtml(t.text))}</div>
+                    ${t.flagged && t.flag_reason ? `<div class="tweet-reason">${highlightSearch(escapeHtml(t.flag_reason))}</div>` : ''}
                     <div class="tweet-meta">
-                        ${t.url ? `<a href="${t.url}" target="_blank">View Tweet</a>` : '<span style="color:#666">No URL</span>'}
+                        ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
+                        ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
                     </div>
                     ${t.images && t.images.length ? `
                         <div class="tweet-images">
@@ -552,12 +802,19 @@
                 </div>
             `).join('');
             
-            panel.classList.add('visible');
+            // Hide pagination when searching
+            document.getElementById('pagination').style.display = searchQuery ? 'none' : (totalPages > 1 ? 'flex' : 'none');
+        }
+
+        // Highlight search matches
+        function highlightSearch(text) {
+            if (!searchQuery) return text;
+            const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<mark style="background: var(--hyper-blue); color: #000; padding: 0 2px;">$1</mark>');
         }
 
         // Poll for job updates
         async function pollJobs() {
-            // Update each tracked job
             for (let i = 0; i < myJobs.length; i++) {
                 const job = myJobs[i];
                 if (job.status === 'completed' || job.status === 'failed') continue;
@@ -581,9 +838,9 @@
                             highlighted_tweets: data.highlighted_tweets
                         };
                         
-                        // Auto-show results if this is the selected job
                         if (job.id === selectedJobId) {
                             showResults(job);
+                            loadTweets(job.id);
                         }
                     }
                 } catch (e) {}
@@ -594,7 +851,7 @@
 
         // Initial render and start polling
         renderJobsList();
-        setInterval(pollJobs, 10000);  // Poll jobs every 10 seconds
+        setInterval(pollJobs, 10000);
 
         // Dashboard collapse toggle
         function toggleDashboard() {
