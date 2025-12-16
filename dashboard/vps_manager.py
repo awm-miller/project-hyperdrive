@@ -123,58 +123,84 @@ class VPSManager:
         if not self.mullvad_account:
             return False, "MULLVAD_ACCOUNT not configured in dashboard environment"
         
+        errors = []
+        
         # Step 1: Create Nitter config if doesn't exist
-        config_cmd = f"cp -n {self.project_path}/nitter-worker1.conf {self.project_path}/nitter-worker{worker_num}.conf 2>/dev/null || true"
+        config_cmd = f"cp -n {self.project_path}/nitter-worker1.conf {self.project_path}/nitter-worker{worker_num}.conf 2>/dev/null; true"
+        self.run_command(config_cmd)
         
-        # Step 2: Update Redis host in config
-        sed_cmd = f"sed -i 's/nitter-redis-1/nitter-redis-{worker_num}/g' {self.project_path}/nitter-worker{worker_num}.conf"
+        # Step 2: Update Redis host in config (only if not worker 1)
+        if worker_num != 1:
+            sed_cmd = f"sed -i 's/nitter-redis-1/nitter-redis-{worker_num}/g' {self.project_path}/nitter-worker{worker_num}.conf"
+            self.run_command(sed_cmd)
         
-        # Step 3: Start nitter-redis for this worker
-        redis_cmd = f"docker run -d --name nitter-redis-{worker_num} --network project-hyperdrive_default redis:7-alpine redis-server --save 60 1 --loglevel warning 2>/dev/null || docker start nitter-redis-{worker_num}"
+        # Step 3: Ensure nitter-redis is running (start existing or create new)
+        redis_name = f"nitter-redis-{worker_num}"
+        check_redis, _, _ = self.run_command(f"docker ps -a --format '{{{{.Names}}}}' | grep -x {redis_name}")
+        if redis_name in check_redis:
+            self.run_command(f"docker start {redis_name}")
+        else:
+            stdout, stderr, code = self.run_command(
+                f"docker run -d --name {redis_name} --network project-hyperdrive_default "
+                f"redis:7-alpine redis-server --save 60 1 --loglevel warning"
+            )
+            if code != 0:
+                errors.append(f"{redis_name}: {stderr or stdout}")
         
-        # Step 4: Start nitter for this worker
-        nitter_cmd = f"""docker run -d --name nitter-{worker_num} --network project-hyperdrive_default \
-            -v {self.project_path}/nitter-worker{worker_num}.conf:/src/nitter.conf:ro \
-            -v {self.project_path}/sessions.jsonl:/src/sessions.jsonl:ro \
-            zedeus/nitter:latest 2>/dev/null || docker start nitter-{worker_num}"""
+        # Step 4: Ensure nitter is running (start existing or create new)
+        nitter_name = f"nitter-{worker_num}"
+        check_nitter, _, _ = self.run_command(f"docker ps -a --format '{{{{.Names}}}}' | grep -x {nitter_name}")
+        if nitter_name in check_nitter:
+            self.run_command(f"docker start {nitter_name}")
+        else:
+            stdout, stderr, code = self.run_command(
+                f"docker run -d --name {nitter_name} --network project-hyperdrive_default "
+                f"-v {self.project_path}/nitter-worker{worker_num}.conf:/src/nitter.conf:ro "
+                f"-v {self.project_path}/sessions.jsonl:/src/sessions.jsonl:ro "
+                f"zedeus/nitter:latest"
+            )
+            if code != 0:
+                errors.append(f"{nitter_name}: {stderr or stdout}")
         
-        # Step 5: Start worker with all required mounts and env vars (using dashboard config)
-        worker_cmd = f"""docker run -d \
-            --name worker-{worker_num} \
-            --network project-hyperdrive_default \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -e REDIS_URL=redis://redis-queue:6379 \
-            -e NITTER_URL=http://nitter-{worker_num}:8080 \
-            -e NITTER_REDIS_HOST=nitter-redis-{worker_num} \
-            -e GEMINI_API_KEY={self.gemini_api_key} \
-            -e MULLVAD_ACCOUNT={self.mullvad_account} \
-            --cap-add=NET_ADMIN \
-            --device=/dev/net/tun \
-            project-hyperdrive_worker-1"""
-        
-        # Run setup commands
-        setup_cmd = f"{config_cmd} && {sed_cmd} && {redis_cmd} && {nitter_cmd}"
-        stdout1, stderr1, code1 = self.run_command(setup_cmd)
-        if code1 != 0:
-            return False, f"Setup failed: {stderr1 or stdout1}"
+        if errors:
+            return False, f"Setup failed: {'; '.join(errors)}"
         
         # Wait for nitter to be ready
         self.run_command("sleep 5")
         
-        # Start worker
-        stdout2, stderr2, code2 = self.run_command(worker_cmd)
-        if code2 != 0:
-            return False, f"Worker start failed: {stderr2 or stdout2}"
+        # Step 5: Ensure worker is running (start existing or create new)
+        worker_name = f"worker-{worker_num}"
+        check_worker, _, _ = self.run_command(f"docker ps -a --format '{{{{.Names}}}}' | grep -x {worker_name}")
+        if worker_name in check_worker:
+            # Remove old container and create fresh one
+            self.run_command(f"docker rm -f {worker_name}")
+        
+        worker_cmd = (
+            f"docker run -d --name {worker_name} "
+            f"--network project-hyperdrive_default "
+            f"-v /var/run/docker.sock:/var/run/docker.sock "
+            f"-e REDIS_URL=redis://redis-queue:6379 "
+            f"-e NITTER_URL=http://nitter-{worker_num}:8080 "
+            f"-e NITTER_REDIS_HOST=nitter-redis-{worker_num} "
+            f"-e GEMINI_API_KEY={self.gemini_api_key} "
+            f"-e MULLVAD_ACCOUNT={self.mullvad_account} "
+            f"--cap-add=NET_ADMIN "
+            f"--device=/dev/net/tun "
+            f"project-hyperdrive_worker-1"
+        )
+        stdout, stderr, code = self.run_command(worker_cmd)
+        if code != 0:
+            return False, f"Worker start failed: {stderr or stdout}"
         
         # Wait 10 seconds for worker to initialize
         self.run_command("sleep 10")
         
         # Connect Mullvad VPN
         vpn_cmd = f"docker exec worker-{worker_num} mullvad connect"
-        stdout3, stderr3, code3 = self.run_command(vpn_cmd)
+        stdout, stderr, code = self.run_command(vpn_cmd)
         
-        if code3 != 0:
-            return True, f"Worker started but VPN connect failed: {stderr3 or stdout3}"
+        if code != 0:
+            return True, f"Worker started but VPN connect failed: {stderr or stdout}"
         
         return True, f"Worker-{worker_num} started successfully with VPN connected"
 
