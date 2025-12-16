@@ -123,57 +123,38 @@ class VPSManager:
         if not self.mullvad_account:
             return False, "MULLVAD_ACCOUNT not configured in dashboard environment"
         
-        errors = []
+        redis_name = f"nitter-redis-{worker_num}"
+        nitter_name = f"nitter-{worker_num}"
+        worker_name = f"worker-{worker_num}"
         
         # Step 1: Create Nitter config if doesn't exist
-        config_cmd = f"cp -n {self.project_path}/nitter-worker1.conf {self.project_path}/nitter-worker{worker_num}.conf 2>/dev/null; true"
-        self.run_command(config_cmd)
+        self.run_command(f"cp -n {self.project_path}/nitter-worker1.conf {self.project_path}/nitter-worker{worker_num}.conf 2>/dev/null || true")
         
         # Step 2: Update Redis host in config (only if not worker 1)
         if worker_num != 1:
-            sed_cmd = f"sed -i 's/nitter-redis-1/nitter-redis-{worker_num}/g' {self.project_path}/nitter-worker{worker_num}.conf"
-            self.run_command(sed_cmd)
+            self.run_command(f"sed -i 's/nitter-redis-1/nitter-redis-{worker_num}/g' {self.project_path}/nitter-worker{worker_num}.conf")
         
-        # Step 3: Ensure nitter-redis is running (start existing or create new)
-        redis_name = f"nitter-redis-{worker_num}"
-        check_redis, _, _ = self.run_command(f"docker ps -a --format '{{{{.Names}}}}' | grep -x {redis_name}")
-        if redis_name in check_redis:
-            self.run_command(f"docker start {redis_name}")
-        else:
-            stdout, stderr, code = self.run_command(
-                f"docker run -d --name {redis_name} --network project-hyperdrive_default "
-                f"redis:7-alpine redis-server --save 60 1 --loglevel warning"
-            )
-            if code != 0:
-                errors.append(f"{redis_name}: {stderr or stdout}")
+        # Step 3: Start or create nitter-redis (try start first, create if doesn't exist)
+        self.run_command(
+            f"docker start {redis_name} 2>/dev/null || "
+            f"docker run -d --name {redis_name} --network project-hyperdrive_default "
+            f"redis:7-alpine redis-server --save 60 1 --loglevel warning"
+        )
         
-        # Step 4: Ensure nitter is running (start existing or create new)
-        nitter_name = f"nitter-{worker_num}"
-        check_nitter, _, _ = self.run_command(f"docker ps -a --format '{{{{.Names}}}}' | grep -x {nitter_name}")
-        if nitter_name in check_nitter:
-            self.run_command(f"docker start {nitter_name}")
-        else:
-            stdout, stderr, code = self.run_command(
-                f"docker run -d --name {nitter_name} --network project-hyperdrive_default "
-                f"-v {self.project_path}/nitter-worker{worker_num}.conf:/src/nitter.conf:ro "
-                f"-v {self.project_path}/sessions.jsonl:/src/sessions.jsonl:ro "
-                f"zedeus/nitter:latest"
-            )
-            if code != 0:
-                errors.append(f"{nitter_name}: {stderr or stdout}")
-        
-        if errors:
-            return False, f"Setup failed: {'; '.join(errors)}"
+        # Step 4: Start or create nitter
+        self.run_command(
+            f"docker start {nitter_name} 2>/dev/null || "
+            f"docker run -d --name {nitter_name} --network project-hyperdrive_default "
+            f"-v {self.project_path}/nitter-worker{worker_num}.conf:/src/nitter.conf:ro "
+            f"-v {self.project_path}/sessions.jsonl:/src/sessions.jsonl:ro "
+            f"zedeus/nitter:latest"
+        )
         
         # Wait for nitter to be ready
         self.run_command("sleep 5")
         
-        # Step 5: Ensure worker is running (start existing or create new)
-        worker_name = f"worker-{worker_num}"
-        check_worker, _, _ = self.run_command(f"docker ps -a --format '{{{{.Names}}}}' | grep -x {worker_name}")
-        if worker_name in check_worker:
-            # Remove old container and create fresh one
-            self.run_command(f"docker rm -f {worker_name}")
+        # Step 5: Remove existing worker and create fresh
+        self.run_command(f"docker rm -f {worker_name} 2>/dev/null || true")
         
         worker_cmd = (
             f"docker run -d --name {worker_name} "
