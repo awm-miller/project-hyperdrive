@@ -211,6 +211,29 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            max-width: 400px;
+        }
+        .search-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-dim);
+            color: var(--star-white);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem;
+            padding: 0.5rem 1rem;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--hyper-blue);
+        }
+        .search-input::placeholder {
+            color: #666;
         }
         .tweets-title {
             font-family: 'Space Mono', monospace;
@@ -506,6 +529,9 @@
             <div class="tweets-section">
                 <div class="tweets-header">
                     <span class="tweets-title">All Tweets</span>
+                    <div class="search-box">
+                        <input type="text" class="search-input" id="tweetSearch" placeholder="Search tweets..." oninput="filterTweets()">
+                    </div>
                     <button class="filter-toggle active" id="filterToggle" onclick="toggleFlaggedFirst()">
                         Flagged First
                     </button>
@@ -562,6 +588,8 @@
         let totalPages = 1;
         let flaggedFirst = true;
         const perPage = 20;
+        let currentTweets = []; // Store current tweets for filtering
+        let searchQuery = '';
 
         // Submit job
         document.getElementById('analyzeForm').addEventListener('submit', async (e) => {
@@ -689,31 +717,11 @@
                 document.getElementById('nextBtn').disabled = data.page >= totalPages;
                 document.getElementById('pagination').style.display = totalPages > 1 ? 'flex' : 'none';
                 
-                // Render tweets
-                if (data.tweets.length === 0) {
-                    container.innerHTML = '<div class="loading-tweets">No tweets found</div>';
-                    return;
-                }
-                
-                container.innerHTML = data.tweets.map(t => `
-                    <div class="tweet-card ${t.flagged ? 'flagged' : ''}">
-                        <div class="tweet-header">
-                            <span class="tweet-date">${t.date || 'Unknown date'}</span>
-                            ${t.flagged ? '<span class="flag-badge">Flagged</span>' : ''}
-                        </div>
-                        <div class="tweet-text">${escapeHtml(t.text)}</div>
-                        ${t.flagged && t.flag_reason ? `<div class="tweet-reason">${escapeHtml(t.flag_reason)}</div>` : ''}
-                        <div class="tweet-meta">
-                            ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
-                            ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
-                        </div>
-                        ${t.images && t.images.length ? `
-                            <div class="tweet-images">
-                                ${t.images.map(src => `<img src="${src}" class="tweet-img" onerror="this.style.display='none'">`).join('')}
-                            </div>
-                        ` : ''}
-                    </div>
-                `).join('');
+                // Store tweets for filtering and render
+                currentTweets = data.tweets;
+                document.getElementById('tweetSearch').value = ''; // Clear search on new load
+                searchQuery = '';
+                renderFilteredTweets();
                 
             } catch (err) {
                 container.innerHTML = `<div class="loading-tweets">Error: ${err.message}</div>`;
@@ -748,6 +756,61 @@
             if (selectedJobId) {
                 loadTweets(selectedJobId);
             }
+        }
+
+        // Filter tweets by search query
+        function filterTweets() {
+            searchQuery = document.getElementById('tweetSearch').value.toLowerCase().trim();
+            renderFilteredTweets();
+        }
+
+        // Render tweets with search filter applied
+        function renderFilteredTweets() {
+            const container = document.getElementById('tweetsContainer');
+            
+            let filtered = currentTweets;
+            if (searchQuery) {
+                filtered = currentTweets.filter(t => 
+                    t.text.toLowerCase().includes(searchQuery) ||
+                    (t.flag_reason && t.flag_reason.toLowerCase().includes(searchQuery))
+                );
+            }
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="loading-tweets">${searchQuery ? 'No tweets match your search' : 'No tweets found'}</div>`;
+                document.getElementById('pagination').style.display = 'none';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(t => `
+                <div class="tweet-card ${t.flagged ? 'flagged' : ''}">
+                    <div class="tweet-header">
+                        <span class="tweet-date">${t.date || 'Unknown date'}</span>
+                        ${t.flagged ? '<span class="flag-badge">Flagged</span>' : ''}
+                    </div>
+                    <div class="tweet-text">${highlightSearch(escapeHtml(t.text))}</div>
+                    ${t.flagged && t.flag_reason ? `<div class="tweet-reason">${highlightSearch(escapeHtml(t.flag_reason))}</div>` : ''}
+                    <div class="tweet-meta">
+                        ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
+                        ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
+                    </div>
+                    ${t.images && t.images.length ? `
+                        <div class="tweet-images">
+                            ${t.images.map(src => `<img src="${src}" class="tweet-img" onerror="this.style.display='none'">`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            // Hide pagination when searching
+            document.getElementById('pagination').style.display = searchQuery ? 'none' : (totalPages > 1 ? 'flex' : 'none');
+        }
+
+        // Highlight search matches
+        function highlightSearch(text) {
+            if (!searchQuery) return text;
+            const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<mark style="background: var(--hyper-blue); color: #000; padding: 0 2px;">$1</mark>');
         }
 
         // Poll for job updates

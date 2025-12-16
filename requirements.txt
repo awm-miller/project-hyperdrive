@@ -4,6 +4,6 @@ httpx
 beautifulsoup4
 python-dotenv
 jinja2
-google-generativeai>=0.8.0
+google-generativeai
 pydantic
 redis
