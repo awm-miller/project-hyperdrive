@@ -71,7 +71,7 @@ class NitterSearchScraper:
         delay_seconds: float = 0.5,  # Fast - we restart on rate limit anyway
         max_tweets: int = 10000,
         chunk_days: int = 30,
-        max_restarts: int = 50,  # Allow many restarts for large scrapes
+        max_restarts: int = 1000,  # Allow many restarts for large scrapes
         docker_compose_path: str = ".",
         nitter_redis_host: Optional[str] = None,  # For Docker mode: direct Redis connection
     ):

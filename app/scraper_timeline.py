@@ -71,7 +71,7 @@ class NitterTimelineScraper:
         nitter_url: Optional[str] = None,
         delay_seconds: float = 0.5,
         max_retweets: int = 10000,
-        max_restarts: int = 100,
+        max_restarts: int = 1000,
         docker_compose_path: str = ".",
     ):
         self.nitter_url = nitter_url or os.getenv("NITTER_URL", "http://localhost:8080")
