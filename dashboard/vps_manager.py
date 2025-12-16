@@ -113,45 +113,63 @@ class VPSManager:
 
     def spin_up_worker(self, worker_num: int) -> tuple[bool, str]:
         """Spin up a new worker with associated Nitter and Redis."""
-        # This creates a full worker stack
-        commands = [
-            self.get_env_vars(),
-            # Create Nitter config if doesn't exist
-            f"cp -n {self.project_path}/nitter-worker1.conf {self.project_path}/nitter-worker{worker_num}.conf 2>/dev/null || true",
-            # Update Redis host in config
-            f"sed -i 's/nitter-redis-1/nitter-redis-{worker_num}/g' {self.project_path}/nitter-worker{worker_num}.conf",
-            # Start Redis for this worker
-            f"docker run -d --name nitter-redis-{worker_num} --network project-hyperdrive_default redis:7-alpine redis-server --save 60 1 --loglevel warning 2>/dev/null || docker start nitter-redis-{worker_num}",
-            # Start Nitter for this worker
-            f"""docker run -d --name nitter-{worker_num} --network project-hyperdrive_default \\
-                -v {self.project_path}/nitter-worker{worker_num}.conf:/src/nitter.conf:ro \\
-                -v {self.project_path}/sessions.jsonl:/src/sessions.jsonl:ro \\
-                zedeus/nitter:latest 2>/dev/null || docker start nitter-{worker_num}""",
-            # Wait for Nitter
-            "sleep 5",
-            # Start worker
-            f"""docker run -d \\
-                --name worker-{worker_num} \\
-                --network project-hyperdrive_default \\
-                --cap-add=NET_ADMIN \\
-                --device /dev/net/tun \\
-                -v /var/run/docker.sock:/var/run/docker.sock \\
-                -e WORKER_ID=worker{worker_num} \\
-                -e NITTER_URL=http://nitter-{worker_num}:8080 \\
-                -e REDIS_URL=redis://redis-queue:6379 \\
-                -e NITTER_REDIS_HOST=nitter-redis-{worker_num} \\
-                -e MULLVAD_ACCOUNT="$MULLVAD_ACCOUNT" \\
-                -e GEMINI_API_KEY="$GEMINI_API_KEY" \\
-                project-hyperdrive_worker-1:latest""",
-            # Wait for worker container to start
-            "sleep 3",
-            # Connect Mullvad VPN
-            f"docker exec worker-{worker_num} mullvad connect"
-        ]
+        # Load env vars from .env file
+        env_cmd = self.get_env_vars()
         
-        full_cmd = " && ".join(commands)
-        stdout, stderr, code = self.run_command(full_cmd)
-        return code == 0, stdout or stderr
+        # Step 1: Create Nitter config if doesn't exist
+        config_cmd = f"cp -n {self.project_path}/nitter-worker1.conf {self.project_path}/nitter-worker{worker_num}.conf 2>/dev/null || true"
+        
+        # Step 2: Update Redis host in config
+        sed_cmd = f"sed -i 's/nitter-redis-1/nitter-redis-{worker_num}/g' {self.project_path}/nitter-worker{worker_num}.conf"
+        
+        # Step 3: Start nitter-redis for this worker
+        redis_cmd = f"docker run -d --name nitter-redis-{worker_num} --network project-hyperdrive_default redis:7-alpine redis-server --save 60 1 --loglevel warning 2>/dev/null || docker start nitter-redis-{worker_num}"
+        
+        # Step 4: Start nitter for this worker
+        nitter_cmd = f"""docker run -d --name nitter-{worker_num} --network project-hyperdrive_default \
+            -v {self.project_path}/nitter-worker{worker_num}.conf:/src/nitter.conf:ro \
+            -v {self.project_path}/sessions.jsonl:/src/sessions.jsonl:ro \
+            zedeus/nitter:latest 2>/dev/null || docker start nitter-{worker_num}"""
+        
+        # Step 5: Start worker with all required mounts and env vars
+        worker_cmd = f"""docker run -d \
+            --name worker-{worker_num} \
+            --network project-hyperdrive_default \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e REDIS_URL=redis://redis-queue:6379 \
+            -e NITTER_URL=http://nitter-{worker_num}:8080 \
+            -e NITTER_REDIS_HOST=nitter-redis-{worker_num} \
+            -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+            -e MULLVAD_ACCOUNT="$MULLVAD_ACCOUNT" \
+            --cap-add=NET_ADMIN \
+            --device=/dev/net/tun \
+            project-hyperdrive_worker-1"""
+        
+        # Run setup commands
+        setup_cmd = f"{env_cmd} && {config_cmd} && {sed_cmd} && {redis_cmd} && {nitter_cmd}"
+        stdout1, stderr1, code1 = self.run_command(setup_cmd)
+        if code1 != 0:
+            return False, f"Setup failed: {stderr1 or stdout1}"
+        
+        # Wait for nitter to be ready
+        self.run_command("sleep 5")
+        
+        # Start worker
+        stdout2, stderr2, code2 = self.run_command(f"{env_cmd} && {worker_cmd}")
+        if code2 != 0:
+            return False, f"Worker start failed: {stderr2 or stdout2}"
+        
+        # Wait 10 seconds for worker to initialize
+        self.run_command("sleep 10")
+        
+        # Connect Mullvad VPN
+        vpn_cmd = f"docker exec worker-{worker_num} mullvad connect"
+        stdout3, stderr3, code3 = self.run_command(vpn_cmd)
+        
+        if code3 != 0:
+            return True, f"Worker started but VPN connect failed: {stderr3 or stdout3}"
+        
+        return True, f"Worker-{worker_num} started successfully with VPN connected"
 
     # ==================== NITTER OPERATIONS ====================
 
