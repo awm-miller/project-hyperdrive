@@ -18,6 +18,10 @@ class VPSManager:
         self.host = os.getenv("VPS_HOST", "localhost")
         self.project_path = os.getenv("VPS_PROJECT_PATH", "/opt/project-hyperdrive")
         
+        # Worker config - loaded from dashboard env
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+        self.mullvad_account = os.getenv("MULLVAD_ACCOUNT", "")
+        
         # Local mode if running on VPS itself (no host specified or localhost)
         self.local_mode = self.host in ["localhost", "127.0.0.1", ""]
         
@@ -113,8 +117,11 @@ class VPSManager:
 
     def spin_up_worker(self, worker_num: int) -> tuple[bool, str]:
         """Spin up a new worker with associated Nitter and Redis."""
-        # Load env vars from .env file
-        env_cmd = self.get_env_vars()
+        # Validate config
+        if not self.gemini_api_key:
+            return False, "GEMINI_API_KEY not configured in dashboard environment"
+        if not self.mullvad_account:
+            return False, "MULLVAD_ACCOUNT not configured in dashboard environment"
         
         # Step 1: Create Nitter config if doesn't exist
         config_cmd = f"cp -n {self.project_path}/nitter-worker1.conf {self.project_path}/nitter-worker{worker_num}.conf 2>/dev/null || true"
@@ -131,7 +138,7 @@ class VPSManager:
             -v {self.project_path}/sessions.jsonl:/src/sessions.jsonl:ro \
             zedeus/nitter:latest 2>/dev/null || docker start nitter-{worker_num}"""
         
-        # Step 5: Start worker with all required mounts and env vars
+        # Step 5: Start worker with all required mounts and env vars (using dashboard config)
         worker_cmd = f"""docker run -d \
             --name worker-{worker_num} \
             --network project-hyperdrive_default \
@@ -139,14 +146,14 @@ class VPSManager:
             -e REDIS_URL=redis://redis-queue:6379 \
             -e NITTER_URL=http://nitter-{worker_num}:8080 \
             -e NITTER_REDIS_HOST=nitter-redis-{worker_num} \
-            -e GEMINI_API_KEY="$GEMINI_API_KEY" \
-            -e MULLVAD_ACCOUNT="$MULLVAD_ACCOUNT" \
+            -e GEMINI_API_KEY={self.gemini_api_key} \
+            -e MULLVAD_ACCOUNT={self.mullvad_account} \
             --cap-add=NET_ADMIN \
             --device=/dev/net/tun \
             project-hyperdrive_worker-1"""
         
         # Run setup commands
-        setup_cmd = f"{env_cmd} && {config_cmd} && {sed_cmd} && {redis_cmd} && {nitter_cmd}"
+        setup_cmd = f"{config_cmd} && {sed_cmd} && {redis_cmd} && {nitter_cmd}"
         stdout1, stderr1, code1 = self.run_command(setup_cmd)
         if code1 != 0:
             return False, f"Setup failed: {stderr1 or stdout1}"
@@ -155,7 +162,7 @@ class VPSManager:
         self.run_command("sleep 5")
         
         # Start worker
-        stdout2, stderr2, code2 = self.run_command(f"{env_cmd} && {worker_cmd}")
+        stdout2, stderr2, code2 = self.run_command(worker_cmd)
         if code2 != 0:
             return False, f"Worker start failed: {stderr2 or stdout2}"
         
