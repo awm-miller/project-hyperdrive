@@ -35,6 +35,7 @@ class Tweet:
     content: str
     timestamp: str
     url: str = ""
+    author: str = ""  # Username of tweet author
     images: list = field(default_factory=list)
     retweets: int = 0
     quotes: int = 0
@@ -431,6 +432,7 @@ class NitterSearchScraper:
                 content=content,
                 timestamp=timestamp,
                 url=tweet_url,
+                author=tweet_username.lower(),  # Store author for filtering
                 images=images,
                 retweets=retweets,
                 quotes=quotes,
@@ -550,6 +552,10 @@ class NitterSearchScraper:
 
                     tweet = self._parse_tweet(parent)
                     if not tweet or tweet.id in seen_ids:
+                        continue
+                    
+                    # Filter: only include tweets BY the target user
+                    if tweet.author and tweet.author != username.lower():
                         continue
                     
                     if not include_retweets and tweet.is_retweet:
