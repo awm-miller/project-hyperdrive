@@ -817,9 +817,9 @@
                     <div class="tweet-meta">
                         ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
                         ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
-                        ${!t.is_retweet && t.id ? `
-                            <button class="screenshot-btn" onclick="screenshotTweet('${t.id}', '${currentUsername}')" title="Screenshot tweet">
-                                📷 Screenshot
+                        ${t.id ? `
+                            <button class="screenshot-btn" onclick="screenshotTweet('${t.id}', '${t.is_retweet ? t.original_author : currentUsername}', ${t.is_retweet || false})" title="${t.is_retweet ? 'Screenshot not available for retweets' : 'Screenshot tweet'}">
+                                📷
                             </button>
                         ` : ''}
                     </div>
@@ -843,9 +843,14 @@
         }
 
         // Screenshot tweet (regular tweets only, not retweets)
-        async function screenshotTweet(tweetId, username) {
+        async function screenshotTweet(tweetId, username, isRetweet) {
             const btn = event.target.closest('.screenshot-btn');
             if (btn.classList.contains('loading')) return;
+            
+            if (isRetweet) {
+                alert('Screenshot not available for retweets');
+                return;
+            }
             
             btn.classList.add('loading');
             btn.textContent = '⏳ Loading...';
