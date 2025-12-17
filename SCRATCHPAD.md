@@ -110,6 +110,25 @@ curl -s http://localhost:8081/search?q=test | head -5
 2. **Workers block on unhealthy Nitter** - Use manual docker run as workaround
 3. **API runs on host, not in Docker** - Should containerize for consistency
 4. **Redis persistence** - Need to set up persistent volume for redis-queue to survive reboots
+5. **Playwright browser binaries** - Screenshot feature requires `playwright install chromium` to be run on VPS
+
+---
+
+## Screenshot Feature (VPS Setup)
+
+The tweet screenshot feature uses Playwright to capture Nitter screenshots. On VPS deployment:
+
+```bash
+# Install Playwright browser binaries (run once on VPS)
+cd /opt/project-hyperdrive
+source venv/bin/activate
+playwright install chromium
+
+# Or with Python module
+python -m playwright install chromium
+```
+
+**Note:** This downloads ~130MB of Chromium binaries. Required for `/api/screenshot` endpoint to work.
 
 ---
 

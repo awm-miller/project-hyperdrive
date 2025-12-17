@@ -176,8 +176,17 @@ class Worker:
             # Build indexed tweets array
             indexed_tweets = []
             for idx, t in enumerate(raw_tweets):
+                # Extract tweet ID from URL or use id attribute
+                tweet_id = getattr(t, 'id', '')
+                if not tweet_id:
+                    # Try to extract from URL: https://twitter.com/user/status/ID
+                    url = getattr(t, 'url', '')
+                    if '/status/' in url:
+                        tweet_id = url.split('/status/')[-1].split('?')[0]
+                
                 tweet_dict = {
                     "index": idx,
+                    "id": tweet_id,
                     "text": getattr(t, 'content', ''),
                     "date": getattr(t, 'timestamp', ''),
                     "url": getattr(t, 'url', ''),

@@ -17,7 +17,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,21 @@ from .scraper_search import NitterSearchScraper
 from .scraper_timeline import NitterTimelineScraper
 from .analyzer import GeminiAnalyzer
 from .jobs import JobQueue, Job, JobStatus
+
+# Import screenshot tool (optional - may not be installed)
+SCREENSHOT_AVAILABLE = False
+screenshot_tweet = None
+try:
+    import sys
+    from pathlib import Path
+    # Add project root to path for tools import
+    project_root = Path(__file__).parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    from tools.screenshot_tweet import screenshot_tweet
+    SCREENSHOT_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Screenshot tool not available: {e}")
 
 load_dotenv()
 
@@ -469,6 +484,45 @@ async def get_workers():
         "workers": workers,
         "count": len(workers)
     }
+
+
+# ==================== SCREENSHOT ENDPOINT ====================
+
+
+@app.get("/api/screenshot")
+async def screenshot_tweet_api(
+    tweet_id: str,
+    username: str,
+):
+    """
+    Screenshot a tweet using Twitter embed.
+    
+    Only supports regular tweets, not retweets.
+    
+    Returns: PNG image
+    """
+    if not SCREENSHOT_AVAILABLE:
+        raise HTTPException(
+            status_code=501, 
+            detail="Screenshot feature not available. Install playwright: pip install playwright && playwright install chromium"
+        )
+    
+    try:
+        png_bytes = await screenshot_tweet(
+            tweet_id=tweet_id,
+            username=username,
+        )
+        
+        return Response(
+            content=png_bytes,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f"inline; filename=tweet_{tweet_id}.png"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Screenshot error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== LEGACY DIRECT ENDPOINTS ====================

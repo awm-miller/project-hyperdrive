@@ -321,6 +321,26 @@
             color: #888;
             font-style: italic;
         }
+        .screenshot-btn {
+            background: transparent;
+            border: 1px solid var(--border-dim);
+            color: #666;
+            padding: 0.3rem 0.5rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .screenshot-btn:hover {
+            border-color: var(--hyper-blue);
+            color: var(--hyper-blue);
+        }
+        .screenshot-btn.loading {
+            pointer-events: none;
+            opacity: 0.5;
+        }
         .tweet-images {
             display: flex;
             gap: 8px;
@@ -590,6 +610,7 @@
         const perPage = 20;
         let currentTweets = []; // Store current tweets for filtering
         let searchQuery = '';
+        let currentUsername = ''; // Track username for screenshots
 
         // Submit job
         document.getElementById('analyzeForm').addEventListener('submit', async (e) => {
@@ -677,9 +698,12 @@
             renderJobsList();
             
             const job = myJobs.find(j => j.id === jobId);
-            if (job && job.status === 'completed') {
-                showResults(job);
-                loadTweets(jobId);
+            if (job) {
+                currentUsername = job.username; // Track for screenshots
+                if (job.status === 'completed') {
+                    showResults(job);
+                    loadTweets(jobId);
+                }
             }
         }
 
@@ -793,6 +817,11 @@
                     <div class="tweet-meta">
                         ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
                         ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
+                        ${!t.is_retweet && t.id ? `
+                            <button class="screenshot-btn" onclick="screenshotTweet('${t.id}', '${currentUsername}')" title="Screenshot tweet">
+                                📷 Screenshot
+                            </button>
+                        ` : ''}
                     </div>
                     ${t.images && t.images.length ? `
                         <div class="tweet-images">
@@ -811,6 +840,59 @@
             if (!searchQuery) return text;
             const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
             return text.replace(regex, '<mark style="background: var(--hyper-blue); color: #000; padding: 0 2px;">$1</mark>');
+        }
+
+        // Screenshot tweet (regular tweets only, not retweets)
+        async function screenshotTweet(tweetId, username) {
+            const btn = event.target.closest('.screenshot-btn');
+            if (btn.classList.contains('loading')) return;
+            
+            btn.classList.add('loading');
+            btn.textContent = '⏳ Loading...';
+            
+            try {
+                const params = new URLSearchParams({
+                    tweet_id: tweetId,
+                    username: username
+                });
+                
+                const resp = await fetch(`/api/screenshot?${params}`);
+                
+                if (!resp.ok) {
+                    const error = await resp.json();
+                    throw new Error(error.detail || 'Failed to generate screenshot');
+                }
+                
+                const blob = await resp.blob();
+                
+                // Try to copy to clipboard
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                    btn.textContent = '✓ Copied!';
+                } catch (clipErr) {
+                    // Fallback: download the image
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `tweet-${tweetId}.png`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    btn.textContent = '✓ Downloaded!';
+                }
+                
+            } catch (err) {
+                console.error('Screenshot error:', err);
+                btn.textContent = '❌ Error';
+                alert('Screenshot failed: ' + err.message);
+            }
+            
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                btn.classList.remove('loading');
+                btn.textContent = '📷 Screenshot';
+            }, 2000);
         }
 
         // Poll for job updates
