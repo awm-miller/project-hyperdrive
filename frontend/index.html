@@ -339,10 +339,10 @@
             font-weight: 600;
             text-transform: uppercase;
         }
-        .screenshot-btn {
+        .archive-btn {
             background: transparent;
             border: 1px solid var(--border-dim);
-            color: #666;
+            color: #888;
             padding: 0.3rem 0.5rem;
             cursor: pointer;
             font-size: 0.75rem;
@@ -350,14 +350,12 @@
             display: inline-flex;
             align-items: center;
             gap: 0.3rem;
+            text-decoration: none;
+            border-radius: 3px;
         }
-        .screenshot-btn:hover {
+        .archive-btn:hover {
             border-color: var(--hyper-blue);
             color: var(--hyper-blue);
-        }
-        .screenshot-btn.loading {
-            pointer-events: none;
-            opacity: 0.5;
         }
         .tweet-images {
             display: flex;
@@ -854,11 +852,7 @@
                     <div class="tweet-meta">
                         ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
                         ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
-                        ${!t.is_retweet && t.id ? `
-                            <button class="screenshot-btn" onclick="screenshotTweet('${t.id}', '${currentUsername}')" title="Screenshot tweet">
-                                📷
-                            </button>
-                        ` : ''}
+                        ${t.url ? `<a href="https://archive.today/?run=1&url=${encodeURIComponent(t.url)}" target="_blank" class="archive-btn" title="Archive this tweet">🗄️ Archive</a>` : ''}
                     </div>
                     ${t.images && t.images.length ? `
                         <div class="tweet-images">
@@ -877,63 +871,6 @@
             if (!searchQuery) return text;
             const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
             return text.replace(regex, '<mark style="background: var(--hyper-blue); color: #000; padding: 0 2px;">$1</mark>');
-        }
-
-        // Screenshot tweet (regular tweets only)
-        async function screenshotTweet(tweetId, username) {
-            const btn = event.target.closest('.screenshot-btn');
-            if (btn.classList.contains('loading')) return;
-            
-            btn.classList.add('loading');
-            btn.textContent = '⏳';
-            btn.style.minWidth = '40px';
-            
-            try {
-                const params = new URLSearchParams({
-                    tweet_id: tweetId,
-                    username: username
-                });
-                
-                const resp = await fetch(`/api/screenshot?${params}`);
-                
-                if (!resp.ok) {
-                    const error = await resp.json().catch(() => ({}));
-                    throw new Error(error.detail || 'Failed to generate screenshot');
-                }
-                
-                const blob = await resp.blob();
-                
-                // Try to copy to clipboard
-                try {
-                    await navigator.clipboard.write([
-                        new ClipboardItem({ 'image/png': blob })
-                    ]);
-                    btn.textContent = '✅';
-                    btn.title = 'Copied to clipboard!';
-                } catch (clipErr) {
-                    // Fallback: download the image
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `tweet-${tweetId}.png`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    btn.textContent = '💾';
-                    btn.title = 'Downloaded!';
-                }
-                
-            } catch (err) {
-                console.error('Screenshot error:', err);
-                btn.textContent = '❌';
-                btn.title = 'Error: ' + err.message;
-            }
-            
-            // Reset button after 2 seconds
-            setTimeout(() => {
-                btn.classList.remove('loading');
-                btn.textContent = '📷';
-                btn.title = 'Screenshot tweet';
-            }, 2000);
         }
 
         // Poll for job updates
