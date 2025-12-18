@@ -254,6 +254,19 @@
             border-color: var(--flag-red);
             color: var(--flag-red);
         }
+        .rt-toggle {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            background: transparent;
+            border: 1px solid var(--border-dim);
+            color: #888;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+        }
+        .rt-toggle.active {
+            border-color: #ff9500;
+            color: #ff9500;
+        }
         
         .tweet-card {
             background: rgba(255, 255, 255, 0.02);
@@ -318,8 +331,13 @@
             text-decoration: none;
         }
         .tweet-meta .retweet-badge {
-            color: #888;
-            font-style: italic;
+            background: rgba(255, 165, 0, 0.2);
+            border: 1px solid #ff9500;
+            color: #ff9500;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
         }
         .screenshot-btn {
             background: transparent;
@@ -552,6 +570,9 @@
                     <div class="search-box">
                         <input type="text" class="search-input" id="tweetSearch" placeholder="Search tweets..." oninput="filterTweets()">
                     </div>
+                    <button class="rt-toggle" id="rtToggle" onclick="toggleShowRetweets()">
+                        Show RTs
+                    </button>
                     <button class="filter-toggle active" id="filterToggle" onclick="toggleFlaggedFirst()">
                         Flagged First
                     </button>
@@ -611,6 +632,7 @@
         let currentTweets = []; // Store current tweets for filtering
         let searchQuery = '';
         let currentUsername = ''; // Track username for screenshots
+        let showRetweets = false; // Hide retweets by default
 
         // Submit job
         document.getElementById('analyzeForm').addEventListener('submit', async (e) => {
@@ -782,6 +804,15 @@
             }
         }
 
+        // Toggle show retweets
+        function toggleShowRetweets() {
+            showRetweets = !showRetweets;
+            const btn = document.getElementById('rtToggle');
+            btn.classList.toggle('active', showRetweets);
+            btn.textContent = showRetweets ? 'Hide RTs' : 'Show RTs';
+            renderFilteredTweets();
+        }
+
         // Filter tweets by search query
         function filterTweets() {
             searchQuery = document.getElementById('tweetSearch').value.toLowerCase().trim();
@@ -793,8 +824,15 @@
             const container = document.getElementById('tweetsContainer');
             
             let filtered = currentTweets;
+            
+            // Filter out retweets if showRetweets is false
+            if (!showRetweets) {
+                filtered = filtered.filter(t => !t.is_retweet);
+            }
+            
+            // Apply search filter
             if (searchQuery) {
-                filtered = currentTweets.filter(t => 
+                filtered = filtered.filter(t => 
                     t.text.toLowerCase().includes(searchQuery) ||
                     (t.flag_reason && t.flag_reason.toLowerCase().includes(searchQuery))
                 );
