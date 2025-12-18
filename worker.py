@@ -178,11 +178,17 @@ class Worker:
             for idx, t in enumerate(raw_tweets):
                 # Extract tweet ID from URL or use id attribute
                 tweet_id = getattr(t, 'id', '')
-                if not tweet_id:
+                url = getattr(t, 'url', '')
+                
+                # Debug first few tweets
+                if idx < 3:
+                    logger.info(f"DEBUG Tweet {idx}: id='{tweet_id}', url='{url}', type={type(t)}")
+                
+                if not tweet_id and '/status/' in url:
                     # Try to extract from URL: https://twitter.com/user/status/ID
-                    url = getattr(t, 'url', '')
-                    if '/status/' in url:
-                        tweet_id = url.split('/status/')[-1].split('?')[0]
+                    tweet_id = url.split('/status/')[-1].split('?')[0]
+                    if idx < 3:
+                        logger.info(f"DEBUG Tweet {idx}: extracted id from url='{tweet_id}'")
                 
                 tweet_dict = {
                     "index": idx,

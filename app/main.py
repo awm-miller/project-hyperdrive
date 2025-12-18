@@ -172,6 +172,7 @@ class HighlightedTweet(BaseModel):
 class StoredTweet(BaseModel):
     """A tweet stored with flag information."""
     index: int
+    id: str = ""  # Tweet ID for screenshots
     text: str
     date: str = ""
     url: str = ""
@@ -405,6 +406,7 @@ async def get_job_tweets(
     tweet_responses = [
         StoredTweet(
             index=t.get("index", 0),
+            id=t.get("id", ""),
             text=t.get("text", ""),
             date=t.get("date", ""),
             url=t.get("url", ""),
