@@ -2,7 +2,6 @@
 
 [build]
   publish = "frontend"
-  ignore = "git submodule update"
   
 [build.environment]
   GIT_LFS_ENABLED = "false"
