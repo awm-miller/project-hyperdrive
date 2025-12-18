@@ -393,22 +393,53 @@ class NitterTimelineScraper:
                     return cursor
         return None
 
+    def _parse_tweet_date(self, timestamp: str) -> Optional[datetime]:
+        """Parse Nitter timestamp format like 'Dec 17, 2025 · 3:45 PM UTC'"""
+        if not timestamp:
+            return None
+        try:
+            # Remove the UTC suffix and timezone indicator
+            clean = timestamp.replace(' UTC', '').strip()
+            # Handle format: "Dec 17, 2025 · 3:45 PM"
+            if ' · ' in clean:
+                clean = clean.split(' · ')[0] + ' ' + clean.split(' · ')[1]
+            # Try parsing "Dec 17, 2025 3:45 PM"
+            return datetime.strptime(clean, "%b %d, %Y %I:%M %p")
+        except ValueError:
+            try:
+                # Try just date part "Dec 17, 2025"
+                date_part = timestamp.split(' · ')[0] if ' · ' in timestamp else timestamp
+                return datetime.strptime(date_part.strip(), "%b %d, %Y")
+            except ValueError:
+                return None
+
     async def scrape_retweets(
         self,
         username: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> ScrapeResult:
         """
-        Scrape all retweets from user's timeline.
-        Goes as far back as possible using pagination.
+        Scrape retweets from user's timeline within optional date range.
+        
+        Args:
+            username: Twitter username
+            start_date: Optional start date (YYYY-MM-DD), retweets before this are skipped
+            end_date: Optional end date (YYYY-MM-DD), retweets after this are skipped
         """
         if not self.client:
             raise RuntimeError("Scraper must be used as async context manager")
+
+        # Parse date filters
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59) if end_date else None
 
         logger.info(f"")
         logger.info(f"{'='*60}")
         logger.info(f"TIMELINE RETWEET SCRAPE: @{username}")
         logger.info(f"{'='*60}")
         logger.info(f"  Max retweets: {self.max_retweets}")
+        logger.info(f"  Date range: {start_date or 'any'} to {end_date or 'any'}")
         logger.info(f"  Delay between pages: {self.delay_seconds}s")
         logger.info(f"{'='*60}")
 
@@ -479,6 +510,7 @@ class NitterTimelineScraper:
                 timeline_items = soup.select('.timeline-item')
                 new_count = 0
                 page_total = 0
+                passed_date_range = False
 
                 for item in timeline_items:
                     page_total += 1
@@ -489,11 +521,29 @@ class NitterTimelineScraper:
                     if tweet.id in seen_ids:
                         continue
                     
+                    # Check date filtering
+                    if start_dt or end_dt:
+                        tweet_dt = self._parse_tweet_date(tweet.timestamp)
+                        if tweet_dt:
+                            # Skip tweets that are too new (after end_date)
+                            if end_dt and tweet_dt > end_dt:
+                                continue
+                            # Stop if tweets are too old (before start_date)
+                            # Timeline is newest first, so once we hit old tweets, all remaining are older
+                            if start_dt and tweet_dt < start_dt:
+                                passed_date_range = True
+                                break
+                    
                     seen_ids.add(tweet.id)
                     result.tweets.append(tweet)
                     new_count += 1
 
                 logger.info(f"[Page {page}] +{new_count} retweets (from {page_total} items) | Total: {len(result.tweets)}")
+                
+                # Stop if we've passed the date range
+                if passed_date_range:
+                    logger.info(f"[Page {page}] Reached tweets before start date ({start_date}), stopping")
+                    break
 
                 if new_count == 0:
                     consecutive_empty += 1

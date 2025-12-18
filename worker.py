@@ -117,7 +117,7 @@ class Worker:
             if job.end_date:
                 end_date = datetime.strptime(job.end_date, "%Y-%m-%d")
             
-            # Step 1: Scrape retweets from timeline
+            # Step 1: Scrape retweets from timeline (with date filtering)
             if job.include_retweets:
                 self.queue.update_progress(job, 10, "Scraping retweets...")
                 logger.info("[Step 1] Scraping retweets...")
@@ -127,7 +127,11 @@ class Worker:
                     delay_seconds=0.5,
                     max_retweets=5000,
                 ) as scraper:
-                    rt_result = await scraper.scrape_retweets(username=job.username)
+                    rt_result = await scraper.scrape_retweets(
+                        username=job.username,
+                        start_date=job.start_date,
+                        end_date=job.end_date,
+                    )
                     raw_tweets.extend(rt_result.tweets)
                     retweets_count = rt_result.total_scraped
                 
