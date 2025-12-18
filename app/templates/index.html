@@ -745,7 +745,7 @@
             container.innerHTML = '<div class="loading-tweets">Loading tweets...</div>';
             
             try {
-                const resp = await fetch(`/api/jobs/${jobId}/tweets?page=${currentPage}&per_page=${perPage}&flagged_first=${flaggedFirst}`);
+                const resp = await fetch(`/api/jobs/${jobId}/tweets?page=${currentPage}&per_page=${perPage}&flagged_first=${flaggedFirst}&show_retweets=${showRetweets}`);
                 if (!resp.ok) throw new Error('Failed to load tweets');
                 
                 const data = await resp.json();
@@ -808,7 +808,10 @@
             const btn = document.getElementById('rtToggle');
             btn.classList.toggle('active', showRetweets);
             btn.textContent = showRetweets ? 'Hide RTs' : 'Show RTs';
-            renderFilteredTweets();
+            currentPage = 1; // Reset to page 1 when changing filter
+            if (selectedJobId) {
+                loadTweets(selectedJobId);
+            }
         }
 
         // Filter tweets by search query
