@@ -172,6 +172,7 @@ class HighlightedTweet(BaseModel):
 class StoredTweet(BaseModel):
     """A tweet stored with flag information."""
     index: int
+    id: str = ""  # Tweet ID for screenshots
     text: str
     date: str = ""
     url: str = ""
