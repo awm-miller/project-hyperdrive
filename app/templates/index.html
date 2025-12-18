@@ -813,7 +813,6 @@
                         ${t.flagged ? '<span class="flag-badge">Flagged</span>' : ''}
                     </div>
                     <div class="tweet-text">${highlightSearch(escapeHtml(t.text))}</div>
-                    ${t.flagged && t.flag_reason ? `<div class="tweet-reason">${highlightSearch(escapeHtml(t.flag_reason))}</div>` : ''}
                     <div class="tweet-meta">
                         ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
                         ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
@@ -848,7 +847,8 @@
             if (btn.classList.contains('loading')) return;
             
             btn.classList.add('loading');
-            btn.textContent = '⏳ Loading...';
+            btn.textContent = '⏳';
+            btn.style.minWidth = '40px';
             
             try {
                 const params = new URLSearchParams({
@@ -859,7 +859,7 @@
                 const resp = await fetch(`/api/screenshot?${params}`);
                 
                 if (!resp.ok) {
-                    const error = await resp.json();
+                    const error = await resp.json().catch(() => ({}));
                     throw new Error(error.detail || 'Failed to generate screenshot');
                 }
                 
@@ -870,7 +870,8 @@
                     await navigator.clipboard.write([
                         new ClipboardItem({ 'image/png': blob })
                     ]);
-                    btn.textContent = '✓ Copied!';
+                    btn.textContent = '✅';
+                    btn.title = 'Copied to clipboard!';
                 } catch (clipErr) {
                     // Fallback: download the image
                     const url = URL.createObjectURL(blob);
@@ -879,19 +880,21 @@
                     a.download = `tweet-${tweetId}.png`;
                     a.click();
                     URL.revokeObjectURL(url);
-                    btn.textContent = '✓ Downloaded!';
+                    btn.textContent = '💾';
+                    btn.title = 'Downloaded!';
                 }
                 
             } catch (err) {
                 console.error('Screenshot error:', err);
-                btn.textContent = '❌ Error';
-                alert('Screenshot failed: ' + err.message);
+                btn.textContent = '❌';
+                btn.title = 'Error: ' + err.message;
             }
             
             // Reset button after 2 seconds
             setTimeout(() => {
                 btn.classList.remove('loading');
-                btn.textContent = '📷 Screenshot';
+                btn.textContent = '📷';
+                btn.title = 'Screenshot tweet';
             }, 2000);
         }
 
