@@ -153,6 +153,32 @@
             background: var(--hyper-blue);
             color: #000;
         }
+        
+        /* Platform Selector */
+        .platform-btn {
+            background: transparent;
+            border: 1px solid var(--border-dim);
+            color: #666;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .platform-btn:hover {
+            border-color: var(--hyper-blue);
+            color: var(--hyper-blue);
+        }
+        .platform-btn.active {
+            background: var(--hyper-blue);
+            border-color: var(--hyper-blue);
+            color: #000;
+        }
+        .platform-btn.instagram.active {
+            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+            border-color: #e6683c;
+            color: #fff;
+        }
 
         /* Results */
         .results-panel {
@@ -502,11 +528,24 @@
     <div class="main-content">
         <header>
             <div class="logo">HYPERDRIVE</div>
-            <div class="subtitle">Twitter Profile Analyzer</div>
+            <div class="subtitle" id="headerSubtitle">Social Media Analyzer</div>
         </header>
 
         <div class="control-panel">
             <form id="analyzeForm">
+                <!-- Platform Selector -->
+                <div class="platform-selector" style="margin-bottom: 1.5rem;">
+                    <label style="margin-bottom: 0.75rem;">Platform</label>
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="platform-btn active" id="platformTwitter" onclick="setPlatform('twitter')">
+                            Twitter
+                        </button>
+                        <button type="button" class="platform-btn" id="platformInstagram" onclick="setPlatform('instagram')">
+                            Instagram
+                        </button>
+                    </div>
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
                         <label>Username</label>
@@ -522,7 +561,8 @@
                     </div>
                 </div>
 
-                <div class="checkbox-row">
+                <!-- Twitter-specific options -->
+                <div class="checkbox-row" id="twitterOptions">
                     <label class="checkbox-item">
                         <input type="checkbox" id="includeTweets" checked>
                         <span>Tweets</span>
@@ -536,8 +576,15 @@
                         <span>Replies</span>
                     </label>
                 </div>
+                
+                <!-- Instagram-specific options -->
+                <div class="form-group" id="instagramOptions" style="display: none;">
+                    <label>Max Posts to Analyze</label>
+                    <input type="number" id="maxPosts" value="100" min="1" style="width: 120px;">
+                    <span style="font-size: 0.8rem; color: #666; margin-left: 0.5rem;">Images analyzed with Gemini Vision</span>
+                </div>
 
-                <div class="form-group">
+                <div class="form-group" id="customPromptGroup">
                     <label>Custom Prompt (Optional)</label>
                     <textarea id="customPrompt" placeholder="Leave empty for default analysis"></textarea>
                 </div>
@@ -552,7 +599,7 @@
                 <div class="results-stats">
                     <div class="stat-item">
                         <div class="stat-value" id="totalTweetsValue">0</div>
-                        <div class="stat-label">Total Tweets</div>
+                        <div class="stat-label" id="totalLabel">Total Tweets</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-value flagged" id="flaggedValue">0</div>
@@ -564,7 +611,7 @@
             
             <div class="tweets-section">
                 <div class="tweets-header">
-                    <span class="tweets-title">All Tweets</span>
+                    <span class="tweets-title" id="contentTitle">All Tweets</span>
                     <div class="search-box">
                         <input type="text" class="search-input" id="tweetSearch" placeholder="Search tweets..." oninput="filterTweets()">
                     </div>
@@ -618,6 +665,9 @@
         document.getElementById('endDate').value = today.toISOString().split('T')[0];
         document.getElementById('startDate').value = lastYear.toISOString().split('T')[0];
 
+        // Platform selection
+        let currentPlatform = 'twitter';
+        
         // Job tracking
         let myJobs = [];
         let selectedJobId = null;
@@ -631,6 +681,39 @@
         let searchQuery = '';
         let currentUsername = ''; // Track username for screenshots
         let showRetweets = false; // Hide retweets by default
+        
+        // Platform switching
+        function setPlatform(platform) {
+            currentPlatform = platform;
+            
+            // Update buttons
+            document.getElementById('platformTwitter').classList.toggle('active', platform === 'twitter');
+            document.getElementById('platformInstagram').classList.toggle('active', platform === 'instagram');
+            document.getElementById('platformInstagram').classList.toggle('instagram', platform === 'instagram');
+            
+            // Update subtitle
+            const subtitle = document.getElementById('headerSubtitle');
+            subtitle.textContent = platform === 'twitter' ? 'Twitter Profile Analyzer' : 'Instagram Profile Analyzer';
+            
+            // Show/hide platform-specific options
+            document.getElementById('twitterOptions').style.display = platform === 'twitter' ? 'flex' : 'none';
+            document.getElementById('instagramOptions').style.display = platform === 'instagram' ? 'block' : 'none';
+            
+            // Update placeholder
+            document.getElementById('username').placeholder = platform === 'twitter' ? '@username' : '@instagram_username';
+            
+            // Update labels for tweets vs posts
+            const isInstagram = platform === 'instagram';
+            document.getElementById('tweetSearch').placeholder = isInstagram ? 'Search posts...' : 'Search tweets...';
+            document.getElementById('contentTitle').textContent = isInstagram ? 'All Posts' : 'All Tweets';
+            document.getElementById('totalLabel').textContent = isInstagram ? 'Total Posts' : 'Total Tweets';
+            
+            // Hide RT toggle for Instagram (no retweets concept)
+            document.getElementById('rtToggle').style.display = isInstagram ? 'none' : 'inline-block';
+            
+            // Hide custom prompt for Instagram (keep for Twitter/Facebook)
+            document.getElementById('customPromptGroup').style.display = isInstagram ? 'none' : 'block';
+        }
 
         // Submit job
         document.getElementById('analyzeForm').addEventListener('submit', async (e) => {
@@ -639,18 +722,34 @@
             const username = document.getElementById('username').value.trim().replace('@', '');
             if (!username) return;
 
-            const payload = {
-                username: username,
-                start_date: document.getElementById('startDate').value,
-                end_date: document.getElementById('endDate').value,
-                include_tweets: document.getElementById('includeTweets').checked,
-                include_retweets: document.getElementById('includeRetweets').checked,
-                include_replies: document.getElementById('includeReplies').checked,
-                custom_prompt: document.getElementById('customPrompt').value
-            };
+            let payload, endpoint;
+            
+            if (currentPlatform === 'instagram') {
+                // Instagram job
+                payload = {
+                    username: username,
+                    start_date: document.getElementById('startDate').value || null,
+                    end_date: document.getElementById('endDate').value || null,
+                    max_posts: parseInt(document.getElementById('maxPosts').value) || 50,
+                    custom_prompt: document.getElementById('customPrompt').value || null
+                };
+                endpoint = '/api/jobs/instagram';
+            } else {
+                // Twitter job
+                payload = {
+                    username: username,
+                    start_date: document.getElementById('startDate').value,
+                    end_date: document.getElementById('endDate').value,
+                    include_tweets: document.getElementById('includeTweets').checked,
+                    include_retweets: document.getElementById('includeRetweets').checked,
+                    include_replies: document.getElementById('includeReplies').checked,
+                    custom_prompt: document.getElementById('customPrompt').value
+                };
+                endpoint = '/api/jobs';
+            }
 
             try {
-                const resp = await fetch('/api/jobs', {
+                const resp = await fetch(endpoint, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
@@ -848,14 +947,15 @@
             container.innerHTML = filtered.map(t => `
                 <div class="tweet-card ${t.flagged ? 'flagged' : ''}">
                     <div class="tweet-header">
-                        <span class="tweet-date">${t.date || 'Unknown date'}</span>
+                        <span class="tweet-date">${t.date || 'Unknown date'}${t.likes > 0 ? ` | ${t.likes.toLocaleString()} likes` : ''}</span>
                         ${t.flagged ? '<span class="flag-badge">Flagged</span>' : ''}
                     </div>
                     <div class="tweet-text">${highlightSearch(escapeHtml(t.text))}</div>
+                    ${t.image_description ? `<div class="image-description" style="font-size: 0.85rem; color: #888; margin: 0.5rem 0; padding: 0.5rem; background: rgba(255,255,255,0.03); border-left: 2px solid #666;"><strong>Image:</strong> ${escapeHtml(t.image_description)}</div>` : ''}
                     <div class="tweet-meta">
                         ${t.is_retweet ? `<span class="retweet-badge">RT @${t.original_author || 'unknown'}</span>` : ''}
                         ${t.url ? `<a href="${t.url}" target="_blank">View Original</a>` : ''}
-                        ${t.url ? `<a href="https://archive.today/?run=1&url=${encodeURIComponent(t.url)}" target="_blank" class="archive-btn" title="Archive this tweet">🗄️ Archive</a>` : ''}
+                        ${t.url ? `<a href="https://archive.today/?run=1&url=${encodeURIComponent(t.url)}" target="_blank" class="archive-btn" title="Archive">🗄️ Archive</a>` : ''}
                     </div>
                     ${t.images && t.images.length ? `
                         <div class="tweet-images">
@@ -915,6 +1015,9 @@
         // Initial render and start polling
         renderJobsList();
         setInterval(pollJobs, 10000);
+        
+        // Initialize platform to Twitter
+        setPlatform('twitter');
 
         // Dashboard collapse toggle
         function toggleDashboard() {

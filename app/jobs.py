@@ -25,12 +25,18 @@ class JobStatus(str, Enum):
     FAILED = "failed"
 
 
+class Platform(str, Enum):
+    TWITTER = "twitter"
+    INSTAGRAM = "instagram"
+
+
 @dataclass
 class Job:
     """Represents an analysis job."""
     id: str
     username: str
     status: JobStatus = JobStatus.PENDING
+    platform: Platform = Platform.TWITTER  # twitter or instagram
     
     # Request parameters
     start_date: Optional[str] = None
@@ -39,6 +45,7 @@ class Job:
     include_retweets: bool = True
     include_replies: bool = True
     custom_prompt: Optional[str] = None
+    max_posts: int = 50  # For Instagram
     
     # Progress tracking
     progress: int = 0  # 0-100
@@ -65,15 +72,21 @@ class Job:
         """Convert to dictionary for Redis storage."""
         data = asdict(self)
         data['status'] = self.status.value
+        data['platform'] = self.platform.value
         return data
     
     @classmethod
     def from_dict(cls, data: dict) -> 'Job':
         """Create from dictionary."""
         data['status'] = JobStatus(data.get('status', 'pending'))
+        # Handle platform field (default to twitter for backward compatibility)
+        data['platform'] = Platform(data.get('platform', 'twitter'))
         # Handle missing all_tweets field for backward compatibility
         if 'all_tweets' not in data:
             data['all_tweets'] = []
+        # Handle missing max_posts field
+        if 'max_posts' not in data:
+            data['max_posts'] = 50
         return cls(**data)
 
 
@@ -103,9 +116,15 @@ class JobQueue:
         include_retweets: bool = True,
         include_replies: bool = True,
         custom_prompt: Optional[str] = None,
+        platform: str = "twitter",
+        max_posts: int = 50,
     ) -> Job:
         """
         Create a new job and add it to the queue.
+        
+        Args:
+            platform: "twitter" or "instagram"
+            max_posts: Maximum posts to scrape (mainly for Instagram)
         
         Returns:
             The created Job object
@@ -113,12 +132,14 @@ class JobQueue:
         job = Job(
             id=str(uuid.uuid4())[:8],  # Short ID for readability
             username=username,
+            platform=Platform(platform),
             start_date=start_date,
             end_date=end_date,
             include_tweets=include_tweets,
             include_retweets=include_retweets,
             include_replies=include_replies,
             custom_prompt=custom_prompt,
+            max_posts=max_posts,
             created_at=datetime.now().isoformat(),
         )
         

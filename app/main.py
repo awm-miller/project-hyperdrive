@@ -155,7 +155,7 @@ class HighlightedTweet(BaseModel):
 
 
 class StoredTweet(BaseModel):
-    """A tweet stored with flag information."""
+    """A tweet/post stored with flag information."""
     index: int
     id: str = ""  # Tweet ID for screenshots
     text: str
@@ -166,6 +166,12 @@ class StoredTweet(BaseModel):
     images: list[str] = []
     flagged: bool = False
     flag_reason: Optional[str] = None
+    # Instagram-specific fields
+    likes: int = 0
+    comments: int = 0
+    image_description: str = ""
+    is_story: bool = False
+    is_video: bool = False
 
 
 class PaginatedTweetsResponse(BaseModel):
@@ -210,6 +216,15 @@ class JobSubmitRequest(BaseModel):
     include_tweets: bool = Field(default=True)
     include_retweets: bool = Field(default=True)
     include_replies: bool = Field(default=True)
+    custom_prompt: Optional[str] = Field(default=None)
+
+
+class InstagramJobRequest(BaseModel):
+    """Request to submit an Instagram analysis job."""
+    username: str = Field(..., description="Instagram username (without @)")
+    start_date: Optional[str] = Field(default=None, description="Start date YYYY-MM-DD")
+    end_date: Optional[str] = Field(default=None, description="End date YYYY-MM-DD")
+    max_posts: int = Field(default=50, description="Maximum posts to analyze")
     custom_prompt: Optional[str] = Field(default=None)
 
 
@@ -298,6 +313,40 @@ async def submit_job(request: JobSubmitRequest):
         job_id=job.id,
         status=job.status.value,
         message=f"Job queued. Position: {job_queue.get_queue_length()}",
+    )
+
+
+@app.post("/api/jobs/instagram", response_model=JobSubmitResponse)
+async def submit_instagram_job(request: InstagramJobRequest):
+    """
+    Submit a new Instagram analysis job to the queue.
+    Uses Gemini Vision to analyze images + captions.
+    """
+    if not job_queue:
+        raise HTTPException(status_code=503, detail="Job queue not available (Redis not connected)")
+    
+    username = request.username.lstrip("@").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+    
+    job = job_queue.create_job(
+        username=username,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        platform="instagram",
+        max_posts=request.max_posts,
+        custom_prompt=request.custom_prompt,
+        include_tweets=True,  # Not used for Instagram
+        include_retweets=False,
+        include_replies=False,
+    )
+    
+    logger.info(f"Instagram job {job.id} submitted for @{username}")
+    
+    return JobSubmitResponse(
+        job_id=job.id,
+        status=job.status.value,
+        message=f"Instagram job queued. Position: {job_queue.get_queue_length()}",
     )
 
 
@@ -400,6 +449,12 @@ async def get_job_tweets(
             images=t.get("images", []),
             flagged=t.get("flagged", False),
             flag_reason=t.get("flag_reason"),
+            # Instagram-specific fields
+            likes=t.get("likes", 0),
+            comments=t.get("comments", 0),
+            image_description=t.get("image_description", ""),
+            is_story=t.get("is_story", False),
+            is_video=t.get("is_video", False),
         )
         for t in page_tweets
     ]

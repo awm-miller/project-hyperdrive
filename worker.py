@@ -23,10 +23,11 @@ from dotenv import load_dotenv
 # Add app to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.jobs import JobQueue, Job, JobStatus
+from app.jobs import JobQueue, Job, JobStatus, Platform
 from app.scraper_timeline import NitterTimelineScraper
 from app.scraper_search import NitterSearchScraper
 from app.analyzer import GeminiAnalyzer
+from app.scraper_instagram import InstagramScraper, InstagramAnalyzer
 
 load_dotenv()
 
@@ -96,10 +97,17 @@ class Worker:
             return False
     
     async def process_job(self, job: Job) -> None:
-        """Process a single job."""
+        """Process a single job - dispatches to platform-specific handler."""
+        if job.platform == Platform.INSTAGRAM:
+            await self.process_instagram_job(job)
+        else:
+            await self.process_twitter_job(job)
+    
+    async def process_twitter_job(self, job: Job) -> None:
+        """Process a Twitter analysis job."""
         logger.info(f"")
         logger.info(f"{'='*60}")
-        logger.info(f"PROCESSING JOB: {job.id}")
+        logger.info(f"PROCESSING TWITTER JOB: {job.id}")
         logger.info(f"  Username: @{job.username}")
         logger.info(f"  Date range: {job.start_date} to {job.end_date}")
         logger.info(f"{'='*60}")
@@ -278,6 +286,156 @@ class Worker:
         except Exception as e:
             logger.exception(f"Job {job.id} failed")
             self.queue.fail_job(job, str(e))
+    
+    async def process_instagram_job(self, job: Job) -> None:
+        """Process an Instagram analysis job."""
+        logger.info(f"")
+        logger.info(f"{'='*60}")
+        logger.info(f"PROCESSING INSTAGRAM JOB: {job.id}")
+        logger.info(f"  Username: @{job.username}")
+        logger.info(f"  Max posts: {job.max_posts}")
+        logger.info(f"  Date range: {job.start_date} to {job.end_date}")
+        logger.info(f"{'='*60}")
+        
+        scraper = None
+        try:
+            # Parse dates
+            start_date = None
+            end_date = None
+            if job.start_date:
+                start_date = datetime.strptime(job.start_date, "%Y-%m-%d")
+            if job.end_date:
+                end_date = datetime.strptime(job.end_date, "%Y-%m-%d")
+            
+            # Step 1: Scrape Instagram posts (and stories if cookies available)
+            self.queue.update_progress(job, 10, "Scraping Instagram posts...")
+            logger.info("[Step 1] Scraping Instagram posts...")
+            
+            scraper = InstagramScraper(
+                download_dir="instagram_downloads",
+                max_posts=job.max_posts,
+                cookies_file="cookies.txt",
+            )
+            
+            # Try to login for stories (optional - will skip if no cookies)
+            include_stories = scraper.login()
+            
+            scrape_result = scraper.scrape(
+                username=job.username,
+                start_date=start_date,
+                end_date=end_date,
+                include_stories=include_stories,
+            )
+            
+            if scrape_result.error:
+                self.queue.fail_job(job, scrape_result.error)
+                return
+            
+            # Combine posts and stories
+            all_content = scrape_result.posts + scrape_result.stories
+            
+            if not all_content:
+                self.queue.fail_job(job, "No posts or stories found")
+                return
+            
+            posts_count = len(scrape_result.posts)
+            stories_count = len(scrape_result.stories)
+            total_count = len(all_content)
+            
+            status_msg = f"Got {posts_count} posts"
+            if stories_count > 0:
+                status_msg += f" + {stories_count} stories"
+            
+            self.queue.update_progress(
+                job, 40, status_msg,
+                tweets_scraped=total_count
+            )
+            logger.info(f"[Step 1] {status_msg}")
+            
+            # Step 2: Analyze with Gemini Vision
+            self.queue.update_progress(job, 50, "Analyzing with Gemini Vision...")
+            logger.info("[Step 2] Analyzing with Gemini Vision...")
+            
+            # Disconnect VPN before Gemini call
+            self._disconnect_vpn()
+            
+            try:
+                analyzer = InstagramAnalyzer(api_key=self.gemini_key)
+                summary, analyzed_posts = analyzer.analyze_posts(
+                    posts=all_content,
+                    username=job.username,
+                )
+            finally:
+                # Always reconnect VPN after Gemini call
+                self._reconnect_vpn()
+            
+            self.queue.update_progress(job, 80, "Finalizing...")
+            
+            # Convert posts to dict format for storage
+            all_posts = []
+            flagged_count = 0
+            for idx, post in enumerate(analyzed_posts):
+                post_dict = {
+                    "index": idx,
+                    "id": post.id,
+                    "text": post.caption,
+                    "date": post.date,
+                    "url": post.url,
+                    "is_retweet": False,  # Instagram doesn't have retweets
+                    "is_story": post.is_story,
+                    "is_video": post.is_video,
+                    "likes": post.likes,
+                    "comments": post.comments,
+                    "image_description": post.image_description,
+                    "flagged": post.flagged,
+                    "flag_reason": post.flag_reason,
+                }
+                all_posts.append(post_dict)
+                if post.flagged:
+                    flagged_count += 1
+            
+            # Sort: flagged first, then by date
+            sorted_posts = sorted(
+                all_posts,
+                key=lambda p: (not p["flagged"], p.get("date", "")),
+            )
+            
+            # Build highlighted for backward compat
+            highlighted = [
+                {"text": p["text"], "reason": p["flag_reason"], "url": p["url"]}
+                for p in sorted_posts if p["flagged"]
+            ]
+            
+            # Complete job
+            self.queue.complete_job(
+                job=job,
+                analysis=summary,
+                themes=[],
+                highlighted_tweets=highlighted,
+                tweets_scraped=posts_count,
+                retweets_scraped=0,
+                all_tweets=sorted_posts,
+            )
+            
+            logger.info(f"")
+            logger.info(f"{'='*60}")
+            logger.info(f"INSTAGRAM JOB COMPLETE: {job.id}")
+            logger.info(f"  Posts: {posts_count}")
+            logger.info(f"  Flagged: {flagged_count}")
+            logger.info(f"{'='*60}")
+            
+        except Exception as e:
+            logger.exception(f"Instagram job {job.id} failed")
+            self.queue.fail_job(job, str(e))
+        
+        finally:
+            # Cleanup: delete downloaded images
+            if scraper:
+                try:
+                    scraper.cleanup(job.username)
+                    logger.info(f"Cleaned up images for @{job.username}")
+                except Exception as e:
+                    logger.warning(f"Cleanup failed: {e}")
     
     async def run(self) -> None:
         """Main worker loop."""
